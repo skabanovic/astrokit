@@ -417,12 +417,17 @@ def moment_N(order, hdul, noise_level = 1.0e-6):
 #
 #############################################################
 
-def histo(bin_size, bin_min, bin_max, hdul):
+def do_grid(bin_min, bin_max, bin_size):
 
-    interval    = np.arange(bin_min, bin_max, bin_size)
+    grid  = np.arange(bin_min, bin_max, bin_size)
+
+    return grid
+
+def histogram(grid, hdul):
+
     pixel_count = np.zeros([len(interval)])
 
-    idx_max = (bin_max-bin_min)/bin_size
+    idx_max = len(grid)-1
     idx_min = 0
 
     for dec in range(len(hdul[0].data[:,0])):
@@ -431,12 +436,12 @@ def histo(bin_size, bin_min, bin_max, hdul):
                     or np.isinf(hdul[0].data[dec,ra])
                     or hdul[0].data[dec,ra]==0):
 
-                idx = int((hdul[0].data[dec,ra]-bin_min)/bin_size)
+                idx = get_idx(hdul[0].data[dec,ra], grid)
 
                 if (( idx < idx_max) & (idx >= idx_min)):
                     pixel_count[idx] += 1
 
-    return pixel_count, interval
+    return pixel_count
 
 #############################################################
 #
