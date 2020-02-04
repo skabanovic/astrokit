@@ -425,7 +425,7 @@ def do_grid(bin_min, bin_max, bin_size):
 
 def histogram(grid, hdul):
 
-    pixel_count = np.zeros([len(interval)])
+    pixel_count = np.zeros([len(grid)])
 
     idx_max = len(grid)-1
     idx_min = 0
