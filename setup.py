@@ -12,9 +12,7 @@ setup(
                       'astropy',
                       'astroquery',
                       'PyAstronomy',
-                      'time',
                       'scipy',
-                      'math',
                       'sympy'],
     # scripts=[
     #          'astro/celestial.py',
