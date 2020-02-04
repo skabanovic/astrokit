@@ -8,7 +8,14 @@ setup(
     author_email='kabanovic@ph1.uni-koeln.de',
     packages=find_packages(exclude=('doku')),  # same as name
     # external packages as dependencies
-    install_requires=['numpy', 'astropy', 'astroquery'],
+    install_requires=['numpy',
+                      'astropy',
+                      'astroquery',
+                      'PyAstronomy',
+                      'time',
+                      'scipy',
+                      'math',
+                      'sympy'],
     # scripts=[
     #          'astro/celestial.py',
     #          'math/curve.py',

@@ -18,10 +18,10 @@ import numpy as np
 #############################################################
 
 # import line profile library
-from astrokit_py.radeq import transition_line_cii as line
+from astrokit.radeq import transition_line_cii as line
 
 # imposrt physical constants
-from astrokit_py.radeq import const
+from astrokit.radeq import const
 
 
 #############################################################

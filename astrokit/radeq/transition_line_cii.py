@@ -23,7 +23,7 @@ import numpy as np
 #
 #############################################################
 
-from astrokit_py.radeq import const
+from astrokit.radeq import const
 
 #############################################################
 #

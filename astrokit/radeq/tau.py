@@ -10,7 +10,7 @@ from sympy.solvers import solve
 from sympy import Symbol, exp
 import numpy as np
 
-from astrokit_py.num import solver
+from astrokit.num import solver
 
 def tau_ratio_eq(tau, iso_ratio, ratio_norm, obs_ratio):
 
