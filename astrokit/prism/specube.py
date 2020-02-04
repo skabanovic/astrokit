@@ -803,6 +803,18 @@ def zeros_map(hdul):
 
     return empty_map
 
+def zeros_cube(hdul):
+
+    cube_size = np.zeros_like(hdul[0].data)
+    hdu = fits.PrimaryHDU(cube_size)
+    empty_cube = fits.HDUList([hdu])
+
+    # the output hdulist (map_intg) is geting the header information
+    # of the input spectral cube ()hdul
+    empty_cube[0].header = copy.deepcopy(hdul[0].header)
+
+    return empty_cube
+
 def pi_diagram(path, hdul, beam = 0):
 
     intens = np.zeros_like(path[0,:])
