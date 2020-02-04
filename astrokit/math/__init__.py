@@ -1,2 +1,2 @@
-from curve import *
-from transform import *
+from .curve import *
+from .transform import *

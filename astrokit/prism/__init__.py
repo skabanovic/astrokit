@@ -1,3 +1,3 @@
-from dendrokit import *
-from mask import *
-from specube import *
+from .dendrokit import *
+from .mask import *
+from .specube import *

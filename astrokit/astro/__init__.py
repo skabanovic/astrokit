@@ -1,1 +1,1 @@
-from celestial import *
+from .celestial import *

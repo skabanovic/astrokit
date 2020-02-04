@@ -1,1 +1,1 @@
-from solve import *
+from .solver import *
