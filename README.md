@@ -3,8 +3,8 @@
 
 install:
 
-pip install astrokit
+pip install astrokit/
 
 update:
 
-pip install -U -e astrokit
+pip install -U -e astrokit/
