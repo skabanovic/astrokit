@@ -19,6 +19,29 @@ from astropy.wcs import WCS
 
 from astrokit.prism import specube
 
+def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_frame = 'icrs'):
+
+    obj_coor = SkyCoord(ra=obj_pos1, dec=obj_pos2, distance = obj_dist, frame = coor_frame)
+
+    gc_dist = 8178
+
+    gc_dist_err = 22
+
+    gc2obj_const = gc_dist**2 + (obj_dist.value*np.cos(obj_coor.galactic.b))**2\
+                 - 2. * gc_dist*obj_dist.value * np.cos(obj_coor.galactic.b) * np.cos(obj_coor.galactic.l)
+
+    gc2obj_dist = np.sqrt(gc2obj_const)
+
+    gc2obj_err_gc = 2. * gc_dist - 2. * obj_dist.value * np.cos(obj_coor.galactic.b) * np.cos(obj_coor.galactic.l)
+
+    gc2obj_err_obj = 2. * obj_dist.value * np.cos(obj_coor.galactic.b)**2 \
+                     - 2. * gc_dist * np.cos(obj_coor.galactic.b) * np.cos(obj_coor.galactic.l)
+
+    gc2obj_err = np.sqrt(1./(4. * gc2obj_const) *(gc2obj_err_gc**2 * gc_dist_err**2 \
+                                                   + gc2obj_err_obj**2*obj_dist_err.value**2))
+
+    return gc2obj_dist, gc2obj_err
+
 def plx2dist(parallax, parallax_err):
 
     if parallax > 1e-9:
