@@ -45,6 +45,7 @@ freq_0 = 1900.5369e9
 
 # abundance ratio between [12CII]/[13CII] in Orion A
 abundace_ratio = 67.
+# abundace_ratio = 65
 
 # relative line strength of the 13CII satellites
 line_f21_norm = 0.625

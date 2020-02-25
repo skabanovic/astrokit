@@ -265,7 +265,7 @@ def channel_map(hdul, ch_min, ch_max, ch_res = 1, unit = 'channel'):
     map_intg[0].header['BUNIT'] = 'K km/s (Tmb)'
 
     axis = 3
-    vel = astrokit.get_axis(3, hdul)/1.0e3
+    vel = get_axis(3, hdul)/1.0e3
 
     ch_maps = []
 
@@ -416,12 +416,6 @@ def moment_N(order, hdul, noise_level = 1.0e-6):
 # hdul: the spectral cube
 #
 #############################################################
-
-def do_grid(bin_min, bin_max, bin_size):
-
-    grid  = np.arange(bin_min, bin_max, bin_size)
-
-    return grid
 
 def histogram(grid, hdul):
 

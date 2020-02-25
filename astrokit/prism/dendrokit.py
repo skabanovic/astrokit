@@ -36,9 +36,15 @@ def find_struct(dendro, struct_type="leaf"):
 
 
 
-def struct_average(hdul, dendro, weight_map = 'nan',  struct_type="leaf", weight = False):
+def struct_average(hdul, dendro, weight_map = None,  struct_type="leaf", weight = False):
 
-    struct_idx = find_struct(dendro, struct_type)
+    if struct_type == "leaf" or struct_type == "branch":
+
+        struct_idx = find_struct(dendro, struct_type)
+        
+    elif struct_type == "all":
+
+        struct_idx = np.arange(len(dendro))
 
     ax_len = len(hdul[0].data[:,0,0])
 
