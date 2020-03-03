@@ -568,6 +568,55 @@ def rm_borders(hdul, wei_map, wei_min):
         hdul_new[0].data[idx_dec, wei_map[0].data<wei_min] = np.nan
     return hdul_new
 
+
+def noise_intensity(vel_min, vel_max,  vel, spect):
+
+    idx_min = get_idx(vel_min, vel)
+
+    idx_max = get_idx(vel_max, vel)
+
+    spect_noise = spect[idx_min:idx_max]
+
+    ch_num = idx_max - idx_min +1
+
+    vel_res = abs(vel[1]-vel[0])
+
+    # determine the rms of the noise
+    rms = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-1))
+
+    intensity = rms * np.sqrt(ch_num) * vel_res
+
+    return intensity
+
+def noise_intensity_map(vel_min, vel_max, hdul):
+
+    # make an empty map
+    map_size = np.zeros_like(hdul[0].data[0,:,:])
+    hdu = fits.PrimaryHDU(map_size)
+    noise_map = fits.HDUList([hdu])
+    noise_map[0].header = copy.deepcopy(hdul[0].header)
+
+    # remove 3d attributes from header
+    for attribute in list(noise_map[0].header.keys()):
+        if not (attribute == ''):
+            if (attribute[-1] == '3'):
+                del noise_map[0].header[attribute]
+
+    noise_map[0].header['NAXIS']=2
+
+
+    axis=3
+    vel = get_axis(axis, hdul)/1e3
+
+    len_ax1 = len(noise_map[0].data[:,0])
+    len_ax2 = len(noise_map[0].data[0,:])
+
+    for idx1 in range(len_ax1):
+        for idx2 in range(len_ax2):
+            noise_map[0].data[idx1, idx2] = noise_intensity(vel_min, vel_max, vel, hdul[0].data[:, idx1, idx2])
+
+    return noise_map
+
 #############################################################
 #
 # the function "average_cube()" determines the averaged
@@ -644,7 +693,7 @@ def average_cube(hdul_inp, sigma=0, weight='none'):
     else:
         print("error: no valid weight is set")
 
-def average_volume(hdul_inp, pos, shape, radius = 1, width = 1, height = 1, sigma = 0):
+def average_volume(hdul_inp, pos, shape, radius = None, width = None, height = None, weight = None):
 
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
@@ -678,7 +727,7 @@ def average_volume(hdul_inp, pos, shape, radius = 1, width = 1, height = 1, sigm
         bool_sig3 = np.isin(grid2d_r, grid2d_sig3)
         idx_sig3=np.asarray(np.where(bool_sig3))
 
-        if sigma == 0:
+        if weight:
 
             count = 0
 
@@ -696,12 +745,10 @@ def average_volume(hdul_inp, pos, shape, radius = 1, width = 1, height = 1, sigm
 
             for idx_beam in range(len(idx_sig3[0,:])):
 
-                weight = 1./sigma[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]**2
-
                 spect_aver[0].data+=hdul_inp[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]\
-                * weight
+                * weight[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]
 
-                weight_sum+=weight
+                weight_sum+=weight[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]
 
             spect_aver[0].data = spect_aver[0].data/weight_sum
 

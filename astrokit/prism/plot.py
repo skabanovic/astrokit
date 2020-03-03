@@ -47,7 +47,7 @@ def plot_spectrum(vel, temp ,
 
     if (ymin and ymax) is not None:
 
-        plt.ymin([ymin, ymax])
+        plt.ylim([ymin, ymax])
 
     if do_save:
         matplotlib.pyplot.savefig(img_path + img_name + '.' + img_format,\
@@ -89,10 +89,28 @@ def plot_map(sky_map, fontsize=18,
 # added by Cristian Guevara
 def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                       columns, rows,
-                      set_limit = True, vmin = None, vmax = None,
+                      legend_location = 'upper left', xloc = None, yloc = None,
+                      vmin = None, vmax = None,
+                      ra_lable = 'RA (J2000)',
+                      dec_lable = 'Dec (J2000)',
+                      color_bar = 'Intensity [K$\,$km/s]',
+                      color_map = 'Spectral_r',
                       do_contour = False, contour_level = None,
                       fontsize = 18, font_scale = 6, axis_scale = 6,
                       save_img = False, img_path='./', img_name = 'image', img_format = 'pdf'):
+
+    if (xloc or yloc) is None:
+
+        if legend_location == 'upper left':
+
+            yloc = 0.9
+            xloc = 0.1
+
+        elif legend_location == 'lower left':
+
+            yloc = 0.1
+            xloc = 0.1
+
 
 
     w = WCS(channel_maps[0][0].header)
@@ -101,6 +119,7 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
     yratio = channel_maps[0][0].header["NAXIS2"]/channel_maps[0][0].header["NAXIS1"]
 
     maxv=[]
+    minv=[]
 
     channel_number = columns*rows
 
@@ -108,11 +127,15 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
 
         channel_maps[channel][0].data = np.nan_to_num(channel_maps[channel][0].data)
         maxv.append(np.nanmax(channel_maps[channel][0].data))
+        minv.append(np.nanmin(channel_maps[channel][0].data))
 
-    if set_limit:
+    if vmin is None:
+
+        vmin = min(maxv)
+
+    if vmax is None:
 
         vmax= max(maxv)
-        vmin = 0
 
     if do_contour :
 
@@ -123,19 +146,19 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
 
         fig = plt.figure(figsize=(25, 15))
         plt.subplot(projection=w)
-        cax=plt.imshow(channel_maps[0][0].data, origin='lower',cmap='Spectral_r', vmax=vmax, vmin=vmin)
+        cax=plt.imshow(channel_maps[0][0].data, origin='lower',cmap=color_map, vmax=vmax, vmin=vmin)
         cbar=plt.colorbar(cax)
         if do_contour:
             plt.contour(channel_maps[0][0].data, contour_level)
-        plt.text(channel_maps[0][0].header["NAXIS1"]*(0.1), channel_maps[0][0].header["NAXIS2"]*0.85, \
+        plt.text(channel_maps[0][0].header["NAXIS1"]*xloc, channel_maps[0][0].header["NAXIS2"]*yloc, \
                  str(vel_start)+" to "+str(vel_start+(1)*vel_res)+" [km/s]", \
                  bbox={'facecolor': 'lightgrey', 'pad': 10}, fontsize = fontsize)
-        plt.xlabel('RA (J2000)', fontsize = fontsize)
-        plt.ylabel('Dec (J2000)', fontsize = fontsize)
-        plt.title('Channel Map '+' ['+str(vel_start)+'_'+str(vel_start+vel_res)+'] km/s' , fontsize = fontsize)
-        cbar.set_label('Intensity [K$\,$km/s]', size = fontsize)
+        plt.xlabel(ra_lable, fontsize = fontsize)
+        plt.ylabel(dec_lable, fontsize = fontsize)
+        plt.title('Channel Map '+' ['+str(vel_start)+'_'+str(vel_start+vel_res)+']$\,$km/s' , fontsize = fontsize)
+        cbar.set_label(color_bar, size = fontsize)
         cbar.ax.tick_params(labelsize = fontsize)
-        cbar.set_label('[K km/s]', size=8*max(columns,rows))
+        cbar.set_label('Intensity [K km/s]', size=font_scale*max(columns,rows))
         plt.rc('xtick', labelsize = fontsize)
         plt.rc('ytick', labelsize = fontsize)
 
@@ -145,9 +168,9 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=0)
         for column in range(columns):
                 a =  fig.add_subplot(gs[0, column], projection=w)
-                a.text(channel_maps[0][0].header["NAXIS1"]*(0.1),\
-                       channel_maps[0][0].header["NAXIS2"]*0.85,\
-                       str(vel_start+column*vel_res)+" to "+str(vel_start+(column+1)*vel_res)+" [km/s]",\
+                a.text(channel_maps[0][0].header["NAXIS1"]*xloc,\
+                       channel_maps[0][0].header["NAXIS2"]*yloc,\
+                       str(vel_start+column*vel_res)+" to "+str(vel_start+(column+1)*vel_res)+"$\,$[km/s]",\
                        bbox={'facecolor': 'lightgrey', 'pad': 10},fontsize=18)
                 lon = a.coords[0]
                 lon.set_ticklabel(size=axis_scale*max(columns,rows))
@@ -156,19 +179,19 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                 if column == 0:
                     lat.set_ticklabel_visible(True)
                     lat.set_ticklabel(size=axis_scale*max(columns,rows))
-                im = a.imshow(channel_maps[column][0].data, cmap='Spectral_r',\
+                im = a.imshow(channel_maps[column][0].data, cmap=color_map,\
                               vmax=vmax, vmin=vmin, origin='lower')
                 if do_contour:
                     a.contour(channel_maps[column][0].data, levels )
                 if column == 0:
-                    lon.set_axislabel('RA (J2000)', size=8*max(columns,rows))
-                    lat.set_axislabel('Dec (J2000)', size=8*max(columns,rows))
+                    lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
+                    lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
 
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.80, 0.125, 0.05/columns, 0.76/rows])
         cbar=fig.colorbar(im, cax=cbar_ax)
         cbar_ax.tick_params(labelsize=8*max(columns, rows))
-        cbar.set_label('[K km/s]',size=8*max(columns, rows))
+        cbar.set_label(color_bar,size=font_scale*max(columns, rows))
 
 
     elif columns==1:
@@ -177,8 +200,8 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=0)
         for row in range(0,rows):
                 a =  fig.add_subplot(gs[row, 0], projection=w)
-                a.text(channel_maps[0][0].header["NAXIS1"]*(0.1), channel_maps[0][0].header["NAXIS2"]*0.85,\
-                       str(vel_start+row*vel_res)+" to "+str(vel_start+(row+1)*vel_res)+" [km/s]",\
+                a.text(channel_maps[0][0].header["NAXIS1"]*xloc, channel_maps[0][0].header["NAXIS2"]*yloc,\
+                       str(vel_start+row*vel_res)+" to "+str(vel_start+(row+1)*vel_res)+"$\,$[km/s]",\
                        bbox={'facecolor': 'lightgrey', 'pad': 10}, fontsize=font_scale*max(columns,rows))
                 lon = a.coords[0]
                 lat = a.coords[1]
@@ -187,19 +210,19 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                 if row == rows - 1:
                     lon.set_ticklabel_visible(True)
                     lon.set_ticklabel(size=axis_scale*max(columns,rows))
-                im = a.imshow(channel_maps[row][0].data, cmap='Spectral_r',\
+                im = a.imshow(channel_maps[row][0].data, cmap=color_map,\
                               vmax=vmax, vmin=vmin, origin='lower')
                 if do_contour:
                     a.contour(channel_maps[row][0].data, levels)
                 if row == rows-1:
-                    lon.set_axislabel('RA (J2000)',size=8*max(columns,rows))
-                    lat.set_axislabel('Dec (J2000)',size=8*max(columns,rows))
+                    lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
+                    lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
 
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.80, 0.125, 0.05, 0.76/rows])
         cbar=fig.colorbar(im, cax=cbar_ax)
         cbar_ax.tick_params(labelsize=8*max(columns, rows))
-        cbar.set_label('[K km/s]',size=8*max(columns,rows))
+        cbar.set_label(color_bar, size=font_scale*max(columns,rows))
 
     else:
 
@@ -209,9 +232,9 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         for row in range(0,rows):
             for column in range(0,columns):
                 a =  fig.add_subplot(gs[row, column],projection=w)
-                a.text(channel_maps[0][0].header["NAXIS1"]*(0.1),
-                       channel_maps[0][0].header["NAXIS2"]*0.85,\
-                       str(vel_start+la*vel_res)+" to "+str(vel_start+(la+1)*vel_res)+" [km/s]",\
+                a.text(channel_maps[0][0].header["NAXIS1"]*xloc,
+                       channel_maps[0][0].header["NAXIS2"]*yloc,\
+                       str(vel_start+la*vel_res)+" to "+str(vel_start+(la+1)*vel_res)+"$\,$[km/s]",\
                        bbox={'facecolor': 'lightgrey', 'pad': 10},fontsize=font_scale*max(columns, rows))
                 lon = a.coords[0]
                 lat = a.coords[1]
@@ -224,9 +247,9 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                     lat.set_ticklabel_visible(True)
                     lat.set_ticklabel(size=axis_scale*max(columns,rows))
                 if row == rows-1 and column == 0:
-                    lon.set_axislabel('RA (J2000)',size=8*max(columns,rows))
-                    lat.set_axislabel('DEC (J2000)',size=8*max(columns,rows))
-                im = a.imshow(channel_maps[la][0].data, cmap='Spectral_r',\
+                    lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
+                    lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
+                im = a.imshow(channel_maps[la][0].data, cmap=color_map,\
                               vmax=vmax, vmin=vmin, origin='lower')
                 if do_contour:
                     a.contour(channel_maps[la][0].data,levels )
@@ -237,7 +260,7 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         cbar_ax = fig.add_axes([0.80, 0.125, 0.05/rows, 0.76/rows])
         cbar=fig.colorbar(im, cax=cbar_ax)
         cbar_ax.tick_params(labelsize=8*max(columns, rows))
-        cbar.set_label('[K km/s]',size=8*max(columns,rows))
+        cbar.set_label(color_bar, size=font_scale*max(columns,rows))
 
         if save_img:
 

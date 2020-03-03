@@ -84,10 +84,16 @@ error_ratio=0, error_main=0, error_iso=0, method = "symbolic", tau_max = 30):
 
     return optical_depth, error_tau
 
+
 def tau_spect(spect, vel,
               vel_min, vel_max,
               iso_shift, iso_ratio, iso_norm,
-              spect_rms, error_ratio):
+              spect_rms, error_ratio,
+              spect_iso = [], vel_iso = []):
+
+
+    if len(spect_iso) == 0:
+        spect_iso = spect
 
     idx_min = astrokit.get_idx(vel_min, vel)
     idx_max = astrokit.get_idx(vel_max, vel)
@@ -102,7 +108,7 @@ def tau_spect(spect, vel,
 
     for vel_idx in range(len(vel_iso)):
 
-        Tmb_iso[vel_idx] = astrokit.get_value(vel_iso[vel_idx], vel, spect)
+        Tmb_iso[vel_idx] = astrokit.get_value(vel_iso[vel_idx], vel, spect_iso)
 
         if (Tmb_iso[vel_idx] < spect_rms):
 
@@ -126,3 +132,31 @@ def tau_spect(spect, vel,
 
 
     return tau, error_tau
+
+
+def hyperfine_avarage(spect, vel,
+                      vel_range, vel_shift, weight):
+
+    num_of_hyper = len(vel_shift)
+
+    Tmb_temp = np.zeros(num_of_hyper)
+
+    idx_min = astrokit.get_idx(vel_range[0], vel)
+    idx_max = astrokit.get_idx(vel_range[1], vel)
+
+    vel_hyper = np.zeros_like(vel[idx_min:idx_max])
+    Tmb_hyper = np.zeros_like(vel[idx_min:idx_max])
+
+    vel_hyper = vel[idx_min:idx_max]
+
+    for vel_idx in range(len(vel_hyper)):
+
+        for hyper_line in range(num_of_hyper):
+
+            Tmb_temp[hyper_line] = astrokit.get_value(vel[idx_min+vel_idx]+vel_shift[hyper_line], vel, spect)\
+                                 * weight[hyper_line]
+
+        Tmb_hyper[vel_idx] = sum(Tmb_temp)/sum(weight)
+
+
+    return Tmb_hyper, vel_hyper
