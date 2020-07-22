@@ -21,11 +21,7 @@ astrokit/prism/mask.py
 astrokit/prism/plot.py
 astrokit/prism/specube.py
 astrokit/radeq/__init__.py
-astrokit/radeq/const.py
-astrokit/radeq/radeq2layer.py
-astrokit/radeq/radeq2layer_cii.py
+astrokit/radeq/model_2layer.py
 astrokit/radeq/tau.py
-astrokit/radeq/transition_line.py
-astrokit/radeq/transition_line_cii.py
 astrokit/watch/__init__.py
 astrokit/watch/progress.py

@@ -97,6 +97,11 @@ def interp_cube(hdul_inp, hdul_ref):
     # nan and inf are set to numbers (e.g. nan to 0)
     hdul_inp[0].data = np.nan_to_num(hdul_inp[0].data)
 
+    order = 0
+    map_inp = astrokit.moment_N(order, hdul_inp)
+    binary_map = astrokit.zeros_map(map_inp)
+    binary_map[0].data[map_inp[0].data != 0] = 1
+
     # check dimension of the reference grid
     dim_ref=hdul_ref[0].header['NAXIS']
 
@@ -137,6 +142,9 @@ def interp_cube(hdul_inp, hdul_ref):
 
     # the input grid is interpolated on the reference grid
     # for every velocity channel.
+
+    binary_mask = interp_map(binary_map, hdul_ref)
+
     for idx_vel in range(vel_len):
 
         time_start = time.time()
@@ -152,6 +160,8 @@ def interp_cube(hdul_inp, hdul_ref):
         # checks the time remaining untill the 3D interpolation routine
         # is done.
         astrokit.loop_time(idx_vel, vel_len, time_start, time_end)
+
+        hdul_mask[0].data[:, binary_mask[0].data < 0.9 ] = 0
 
     return hdul_mask
 
@@ -370,7 +380,7 @@ def resample(hdul_inp, vel_res):
 
     step_size_out = vel_res*1e3
 
-    vel_out = np.arange(vel_inp[0], vel_inp[axis_len_inp-1], step_size_out)
+    vel_out = np.arange(vel_inp[0], vel_inp[axis_len_inp-1]+step_size_out, step_size_out)
     axis_len_out = len(vel_out)
     weight = np.zeros_like(vel_out)
 

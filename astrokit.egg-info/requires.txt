@@ -4,3 +4,6 @@ astroquery
 PyAstronomy
 scipy
 sympy
+astrodendro
+matplotlib
+pandas

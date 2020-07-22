@@ -6,9 +6,12 @@ import matplotlib
 
 def plot_histogram(axis, counts,
                    fontsize=18,
+                   xmin = None, xmax = None,
+                   ymin = None, ymax = None,
                    title = 'Distribution',
                    xlabel = 'Intensity [K km/s]',
-                   ylabel = 'Counts [#]'):
+                   ylabel = 'Counts [$\#$]',
+                   save_img= False, img_path = './', img_name = 'spectrum', img_format = 'pdf'):
 
 
     fig = plt.figure(figsize=(15,15))
@@ -17,11 +20,25 @@ def plot_histogram(axis, counts,
 
     plt.bar(axis, counts, width=width)
 
+    if (xmin and xmax) is not None:
+
+        plt.xlim([xmin, xmax])
+
+    if (ymin and ymax) is not None:
+
+        plt.ylim([ymin, ymax])
+
     plt.rc('xtick', labelsize=fontsize)
     plt.rc('ytick', labelsize=fontsize)
     plt.title(title, size=fontsize)
     plt.xlabel(xlabel, size=fontsize)
     plt.ylabel(ylabel, size=fontsize)
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
+
+    if save_img:
+        matplotlib.pyplot.savefig(img_path + img_name + '.' + img_format,\
+                                  transparent = True, bbox_inches = 'tight', pad_inches = 0)
 
 def plot_spectrum(vel, temp ,
                   fontsize = 18,
@@ -59,6 +76,8 @@ def plot_map(sky_map, fontsize=18,
              dec_lable = 'Dec (J2000)',
              cbar_lable = 'Intensity [K$\,$km/s]',
              title = 'Moment 0',
+             interpolation = 'none',
+             font_style = 'none',
              save_img = False, img_path='./', img_name = 'image', img_format = 'pdf'):
 
     wcs = WCS(sky_map[0].header)
@@ -67,23 +86,27 @@ def plot_map(sky_map, fontsize=18,
     plt.subplot(projection=wcs)
     if (vmin and vmax) is not None:
         cax=plt.imshow(sky_map[0].data, origin='lower', vmin = vmin, vmax =vmax,
-                       cmap='Spectral_r', interpolation='gaussian')
+                       cmap='Spectral_r', interpolation = interpolation)
     else:
         cax=plt.imshow(sky_map[0].data, origin='lower',
-                       cmap='Spectral_r', interpolation='gaussian')
+                       cmap='Spectral_r', interpolation = interpolation)
     cbar=plt.colorbar(cax)
     plt.xlabel(ra_lable ,fontsize=fontsize)
     plt.ylabel(dec_lable ,fontsize=fontsize)
     plt.title(title ,fontsize=fontsize)
     cbar.set_label(cbar_lable ,size=fontsize)
     cbar.ax.tick_params(labelsize=fontsize)
-    plt.xticks(fontsize = fontsize)
-    plt.yticks(fontsize = fontsize)
+    plt.rc('xtick', labelsize=fontsize)
+    plt.rc('ytick', labelsize=fontsize)
+
+    if font_style == 'latex':
+        plt.rc('text', usetex=True)
+        plt.rc('font', family='serif')
 
     if save_img:
 
         matplotlib.pyplot.savefig(img_path+img_name+'.'+img_format,\
-                                  transparent = True, bbox_inches = 'tight', pad_inches = 0)
+                                  transparent = False, bbox_inches = 'tight', pad_inches = 0)
 
 
 # added by Cristian Guevara
@@ -161,11 +184,15 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         cbar.set_label('Intensity [K km/s]', size=font_scale*max(columns,rows))
         plt.rc('xtick', labelsize = fontsize)
         plt.rc('ytick', labelsize = fontsize)
+        plt.rc('text', usetex=True)
+        plt.rc('font', family='serif')
 
     elif rows==1 :
 
         fig = plt.figure(dpi=70,figsize=(10*columns, 9*rows*yratio))
-        gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=0)
+        gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=-0.01)
+        plt.rc('text', usetex=True)
+        plt.rc('font', family='serif')
         for column in range(columns):
                 a =  fig.add_subplot(gs[0, column], projection=w)
                 a.text(channel_maps[0][0].header["NAXIS1"]*xloc,\
@@ -186,6 +213,11 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                 if column == 0:
                     lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
                     lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
+                else:
+                    lon.set_axislabel(' ')
+                    lat.set_axislabel(' ')
+
+
 
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.80, 0.125, 0.05/columns, 0.76/rows])
@@ -197,7 +229,9 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
     elif columns==1:
 
         fig = plt.figure(dpi=70,figsize=(10*columns, 9*rows*yratio))
-        gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=0)
+        gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=-0.01)
+        plt.rc('text', usetex=True)
+        plt.rc('font', family='serif')
         for row in range(0,rows):
                 a =  fig.add_subplot(gs[row, 0], projection=w)
                 a.text(channel_maps[0][0].header["NAXIS1"]*xloc, channel_maps[0][0].header["NAXIS2"]*yloc,\
@@ -217,6 +251,9 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                 if row == rows-1:
                     lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
                     lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
+                else:
+                    lon.set_axislabel(' ')
+                    lat.set_axislabel(' ')
 
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.80, 0.125, 0.05, 0.76/rows])
@@ -227,8 +264,10 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
     else:
 
         fig = plt.figure(dpi=70,figsize=(10*columns, 9*rows*yratio))
-        gs = gridspec.GridSpec(rows,columns, hspace=0,wspace=0)
+        gs = gridspec.GridSpec(rows,columns, hspace=0,wspace=-0.01)
         la=0
+        plt.rc('text', usetex=True)
+        plt.rc('font', family='serif')
         for row in range(0,rows):
             for column in range(0,columns):
                 a =  fig.add_subplot(gs[row, column],projection=w)
@@ -249,8 +288,15 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                 if row == rows-1 and column == 0:
                     lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
                     lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
+                else:
+                    lon.set_axislabel(' ')
+                    lat.set_axislabel(' ')
+
                 im = a.imshow(channel_maps[la][0].data, cmap=color_map,\
                               vmax=vmax, vmin=vmin, origin='lower')
+
+
+
                 if do_contour:
                     a.contour(channel_maps[la][0].data,levels )
                 la = la+1

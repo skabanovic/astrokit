@@ -44,8 +44,8 @@ einstein_coef = 2.29e-6
 freq_0 = 1900.5369e9
 
 # abundance ratio between [12CII]/[13CII] in Orion A
-# abundace_ratio = 67.
-abundace_ratio = 65
+#abundace_ratio = 67.
+#abundace_ratio = 61.
 
 # relative line strength of the 13CII satellites
 line_f21_norm = 0.625
@@ -205,7 +205,7 @@ def hidden_wing(vel, amp, vel_0, width, hidden_amp, hidden_vel_0, hidden_width):
 #############################################################
 
 # line profile of the [12CII] and [13CII] transition lines
-def spectrum_wing_multi(vel, *param):
+def spectrum_wing_multi(abundace_ratio, vel,  *param):
 
     # conversion factor from FWHM to sigma
     beta = 4.*np.log(2.)

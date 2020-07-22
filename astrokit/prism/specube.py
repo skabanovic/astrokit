@@ -489,37 +489,45 @@ def chop_cube(vel_min, vel_max, hdul_inp):
 #
 #############################################################
 
-def rms_spectrum(window, vel, spect):
+def rms_spectrum(vel, spect, window=None, rms_range=None):
 
     # set nan and inf to number in spectrum
     spect = np.nan_to_num(spect)
 
-    # genarate an empty array
-    # with the same size as the velocity axis
-    rms_mask=np.zeros_like(vel)
+    if window:
+        # genarate an empty array
+        # with the same size as the velocity axis
+        rms_mask=np.zeros_like(vel)
 
-    # copy the spectral data
-    spect_noise=copy.deepcopy(spect)
+        # copy the spectral data
+        spect_noise=copy.deepcopy(spect)
 
-    # generate a mask at the location of the windwos/emission
-    for win_idx in range(0, len(window), 2):
+        # generate a mask at the location of the windwos/emission
+        for win_idx in range(0, len(window), 2):
 
-        start_idx = get_idx(window[win_idx], vel, 'closer')
-        end_idx   = get_idx(window[win_idx+1], vel, 'closer')
+            start_idx = get_idx(window[win_idx], vel, 'closer')
+            end_idx   = get_idx(window[win_idx+1], vel, 'closer')
 
-        rms_mask[start_idx:end_idx]=1
+            rms_mask[start_idx:end_idx]=1
 
-    spect_mask = ma.masked_array(spect, rms_mask)
+        spect_mask = ma.masked_array(spect, rms_mask)
 
-    # set the emission in the spectrum to 0
-    spect_noise[spect_mask.mask]=0.0
+        # set the emission in the spectrum to 0
+        spect_noise[spect_mask.mask]=0.0
 
-    # determine the rms of the noise
-    rms_nois = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)-1))
+        # determine the rms of the noise
+        rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)-1))
 
-    return rms_nois
+    elif range:
 
-def rms_map(window, hdul):
+        idx_min = get_idx(rms_range[0], vel, 'closer')
+        idx_max = get_idx(rms_range[1], vel, 'closer')
+
+        rms_noise = np.sqrt(sum(spect[idx_min:idx_max]**2)/(len(spect[idx_min:idx_max])-1.))
+
+    return rms_noise
+
+def rms_map(hdul, window=None, rms_range=None):
 
     # make an empty map
     map_size = np.zeros_like(hdul[0].data[0,:,:])
@@ -543,7 +551,11 @@ def rms_map(window, hdul):
 
     for idx1 in range(len_ax1):
         for idx2 in range(len_ax2):
-            hdul_rms[0].data[idx1, idx2] = rms_spectrum(window, vel, hdul[0].data[:, idx1, idx2])
+
+            hdul_rms[0].data[idx1, idx2] = rms_spectrum(vel,
+                                                        hdul[0].data[:, idx1, idx2],
+                                                        window,
+                                                        rms_range)
 
     return hdul_rms
 
@@ -556,6 +568,23 @@ def rms2weight(rms_map, min_lim = 1e-9):
     weight_map[0].data[rms_map[0].data<min_lim]=0.0
 
     return weight_map
+
+def gauss_weight(pos_ra, pos_dec, width, sky_map):
+
+    weight = zeros_map(sky_map)
+
+    grid2d_ra, grid2d_dec = get_grid(sky_map)
+
+    len_ra = sky_map[0].header['NAXIS1']
+    len_dec = sky_map[0].header['NAXIS2']
+
+    for dec in range(len_dec):
+        for ra in range(len_ra):
+
+            weight[0].data[dec, ra] =  curve.gauss_2d(width, pos_ra, pos_dec,
+                                                grid2d_ra[dec, ra], grid2d_dec[dec, ra])
+
+    return weight
 
 def rm_borders(hdul, wei_map, wei_min):
 
@@ -693,7 +722,8 @@ def average_cube(hdul_inp, sigma=0, weight='none'):
     else:
         print("error: no valid weight is set")
 
-def average_volume(hdul_inp, pos, shape, radius = None, width = None, height = None, weight = None):
+def average_volume(hdul_inp, pos, shape, radius = None, radius_2 = None,
+                   width = None, height = None, weight = None):
 
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
@@ -715,15 +745,23 @@ def average_volume(hdul_inp, pos, shape, radius = None, width = None, height = N
 
     grid2d_ra, grid2d_dec = get_grid(hdul_inp)
 
-    if shape == "circle":
+    if shape == "circle" or shape == "sphere":
         # determie the distance from the line points to every grid point
-        grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
+        if shape == "circle":
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
 
-        # define relativ radius (3*sigma)
-        sig3_r = radius
+        elif shape == "sphere":
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+((grid2d_ra-pos[0])*np.cos(Angle(pos[1]*u.deg)) )**2)
 
-        # find relavant coordinat values
-        grid2d_sig3=grid2d_r[np.where( grid2d_r < sig3_r )]
+
+        if radius_2:
+
+            grid2d_sig3=grid2d_r[np.where( np.logical_and(grid2d_r>=radius, grid2d_r<=radius_2))]
+
+        else:
+            # find relavant coordinat values
+            grid2d_sig3=grid2d_r[np.where( grid2d_r <= radius )]
+
         bool_sig3 = np.isin(grid2d_r, grid2d_sig3)
         idx_sig3=np.asarray(np.where(bool_sig3))
 
@@ -733,7 +771,7 @@ def average_volume(hdul_inp, pos, shape, radius = None, width = None, height = N
 
             for idx_beam in range(len(idx_sig3[0,:])):
 
-                spect_aver[0].data[:]+=hdul_inp[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]
+                spect_aver[0].data[:]+=hdul_inp[0].data[:,idx_sig3[0,idx_beam], idx_sig3[1,idx_beam]]
 
                 count+=1
 
@@ -756,6 +794,88 @@ def average_volume(hdul_inp, pos, shape, radius = None, width = None, height = N
         print("error: no valid shape entered")
 
     return spect_aver
+
+
+def interp_spect(vel, line, vel_interp):
+
+    line_interp = np.zeros_like(vel_interp)
+
+    for idx in range(len(vel_interp)):
+        line_interp[idx] = get_value(vel_interp[idx], vel, line)
+
+    return line_interp
+
+def average_spectra(spectra, wei):
+
+    aver_spect = np.zeros_like(spectra[0][:])
+
+    for line in range(len(spectra)):
+
+        aver_spect = aver_spect + spectra[line][:]*wei[line]
+
+    aver_spect = aver_spect/np.sum(wei)
+
+    return aver_spect
+
+def area_size(hdul_inp, pos, dist, shape, radius = None, radius_2 = None,
+              width = None, height = None, dist_err = 0):
+
+    res_ra = abs(hdul_inp[0].header["CDELT1"])
+    res_dec = abs(hdul_inp[0].header["CDELT2"])
+
+    pix_size = Angle(res_ra*u.deg).rad * Angle(res_dec*u.deg).rad
+
+    grid2d_ra, grid2d_dec = get_grid(hdul_inp)
+
+    if shape == "circle" or shape == "sphere":
+
+        # determie the distance from the line points to every grid point
+        if shape == "circle":
+
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2 + (grid2d_ra-pos[0])**2)
+
+        elif shape == "sphere":
+
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2 + ((grid2d_ra-pos[0])*np.cos(Angle(pos[1]*u.deg)))**2)
+
+
+        if radius_2:
+
+            grid2d_sig3=grid2d_r[np.where(np.logical_and(grid2d_r>=radius, grid2d_r<=radius_2))]
+
+        else:
+            # find relavant coordinat values
+            grid2d_sig3=grid2d_r[np.where( grid2d_r <= radius )]
+
+        bool_sig3 = np.isin(grid2d_r, grid2d_sig3)
+        idx_sig3=np.asarray(np.where(bool_sig3))
+
+        shape_size = dist**2 * pix_size * len(idx_sig3[0][:])
+
+        shape_size_err = 2. * dist * dist_err * pix_size * len(idx_sig3[0][:])
+
+################################################################################
+#        shape_size = dist**2\
+#                   * np.sum(Angle( abs((grid2d_dec[idx_sig3[0][:]+1, idx_sig3[1][:]+1]-
+#                                        grid2d_dec[idx_sig3[0][:]-1, idx_sig3[1][:]-1])/2.)*u.deg).rad*
+#                            Angle( abs((grid2d_ra[idx_sig3[0][:]+1, idx_sig3[1][:]+1]-
+#                                        grid2d_ra[idx_sig3[0][:]-1, idx_sig3[1][:]-1])/2.)*u.deg).rad*
+#                            np.cos( Angle(grid2d_dec[idx_sig3[0][:], idx_sig3[1][:]]*u.deg).rad ))
+#
+#
+#
+#
+#        shape_size_err = 2.*dist*dist_err\
+#                       * np.sum(Angle( abs((grid2d_dec[idx_sig3[0][:]+1, idx_sig3[1][:]+1]-
+#                                            grid2d_dec[idx_sig3[0][:]-1, idx_sig3[1][:]-1])/2.)*u.deg).rad*
+#                                Angle( abs((grid2d_ra[idx_sig3[0][:]+1, idx_sig3[1][:]+1]-
+#                                            grid2d_ra[idx_sig3[0][:]-1, idx_sig3[1][:]-1])/2.)*u.deg).rad*
+#                                np.cos( Angle(grid2d_dec[idx_sig3[0][:], idx_sig3[1][:]]*u.deg).rad ))
+#
+################################################################################
+
+    return shape_size, shape_size_err
+
 
 def find_peak(vel, spect, peak_window):
 
