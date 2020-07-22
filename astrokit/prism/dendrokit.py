@@ -104,7 +104,7 @@ def struct_size(sky_map, dendro, dist, dist_err = 0, struct_type = "leaf"):
 
         area_size[struct] = dist**2 * pix_size * len(map_idx[0][:])
 
-        area_size_err[struct] = 2. * dist * dist_err * len(map_idx[0][:])
+        area_size_err[struct] = 2. * dist * dist_err * pix_size * len(map_idx[0][:])
 
 ################################################################################
 #
