@@ -269,10 +269,10 @@ def inten_to_colden(inten, Tex=None, inten_err = 0, line = 'cii'):
     return colden, colden_err
 
 def colden_to_mass(colden,
-                   area_size,
+                   area,
                    colden_err=0,
-                   area_size_err=None,
-                   line == 'hi',
+                   area_err=None,
+                   line = 'hi',
                    abundance_ratio = 1.2e-4):
 
 
@@ -287,17 +287,17 @@ def colden_to_mass(colden,
         element_mass = 1.9944235e-26
 
     # convert size of the area to m
-    area_size = area_size.to(u.meter**2)
-    if area_size_err:
-        area_size_err = area_size_err.to(u.meter**2)
+    area = area.to(u.meter**2)
+    if area_err:
+        area_err = area_err.to(u.meter**2)
     else:
-        area_size_err = (0.0*u.pc**2).to(u.meter**2)
+        area_err = (0.0*u.pc**2).to(u.meter**2)
 
-    mass = (area_size.value * colden * element_mass)/abundance_ratio
+    mass = (area.value * colden * element_mass)/abundance_ratio
 
     mass_err = element_mass/abundance_ratio\
-             * np.sqrt(area_size_err.value**2*colden**2
-                       + area_size.value**2*colden_err**2)
+             * np.sqrt(area_err.value**2*colden**2
+                       + area.value**2*colden_err**2)
 
     return mass, mass_err
 
