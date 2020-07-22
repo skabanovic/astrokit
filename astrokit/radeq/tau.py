@@ -268,10 +268,23 @@ def inten_to_colden(inten, Tex=None, inten_err = 0, line = 'cii'):
 
     return colden, colden_err
 
-def mass_cii(colden_cii, area_size, abundance_ratio = 1.2e-4,
-             colden_cii_err=0, area_size_err=None):
+def colden_to_mass(colden,
+                   area_size,
+                   colden_err=0,
+                   area_size_err=None,
+                   line == 'hi',
+                   abundance_ratio = 1.2e-4):
 
-    hydro_mass = 1.6735575e-27
+
+    if line == 'hi':
+
+        # hydrogen mass
+        element_mass = 1.6735575e-27
+
+    elif line == 'cii':
+
+        # carbon mass
+        element_mass = 1.9944235e-26
 
     # convert size of the area to m
     area_size = area_size.to(u.meter**2)
@@ -280,11 +293,11 @@ def mass_cii(colden_cii, area_size, abundance_ratio = 1.2e-4,
     else:
         area_size_err = (0.0*u.pc**2).to(u.meter**2)
 
-    mass = (area_size.value*colden_cii*hydro_mass)/abundance_ratio
+    mass = (area_size.value * colden * element_mass)/abundance_ratio
 
-    mass_err = hydro_mass/abundance_ratio\
-             * np.sqrt(area_size_err.value**2*colden_cii**2
-                       + area_size.value**2*colden_cii_err**2)
+    mass_err = element_mass/abundance_ratio\
+             * np.sqrt(area_size_err.value**2*colden**2
+                       + area_size.value**2*colden_err**2)
 
     return mass, mass_err
 
