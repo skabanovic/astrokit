@@ -346,7 +346,7 @@ def line_luminosity(inten, line, dist = None, area = None,
 
 def colden_map(inten,
                inten_err = None,
-               Tex = None,
+               temp_ex = None,
                line = 'cii'):
 
 
@@ -362,24 +362,38 @@ def colden_map(inten,
         einstein_coef = 2.29e-6
 
        # equivalent temperature of the excited level
-        T_0 = (const.h.value*freq_cii)/const.k_B.value
+        temp_0 = (const.h.value*freq_cii)/const.k_B.value
 
         if Tex:
 
-            const_term = (1+(2./4.)*np.exp(T_0/Tex))* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
+            const_term = (1+(2./4.)*np.exp(temp_0/temp_ex))* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
 
             colden[0].data = const_term*inten[0].data
 
 
         else:
 
-            const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
+            const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
 
             colden[0].data = const_term*inten[0].data
 
         if inten_err:
+
             colden_err[0].data = const_term*inten_err[0].data
+
         else:
+            colden_err[0].data = np.nan
+
+    elif line == 'co(3-2)':
+
+        colden[0].data = 1.58e13*(temp_ex[0].data+0.88)*np.exp(31.7/temp_ex[0].data)*inten[0].data
+
+        if inten_err:
+
+            colden_err[0].data = 1.58e13*(temp_ex[0].data+0.88)*np.exp(31.7/temp_ex[0].data)*inten_err[0].data
+
+        else:
+
             colden_err[0].data = np.nan
 
     return colden, colden_err
@@ -388,6 +402,7 @@ def colden_map(inten,
 def mass_map(colden,
              colden_err = None,
              abundance_ratio = 1.2e-4,
+             element = 'atom',
              dist = 0,
              dist_err = 0,
              shape=None,
@@ -402,7 +417,13 @@ def mass_map(colden,
 
     pixel_size_err = 2. * dist * dist_err * Angle(res_ra*u.deg).rad * Angle(res_dec*u.deg).rad
 
-    hydro_mass = 1.6735575e-27
+    if element == 'atom':
+
+        element_mass = 1.6735575e-27
+
+    elif element == 'molecule':
+
+        element_mass = 2.*1.6735575e-27
 
     mass = astrokit.zeros_map(colden)
     mass_err = astrokit.zeros_map(colden)
@@ -454,11 +475,15 @@ def mass_map(colden,
             #
             ####################################################################
 
-            mass[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] = (pixel_size*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]*hydro_mass)/abundance_ratio
 
-            mass_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] = hydro_mass/abundance_ratio\
+
+            mass[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] = (pixel_size*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]*element_mass)/abundance_ratio
+
+            mass_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] = element_mass/abundance_ratio\
                                                                            * np.sqrt(  pixel_size_err**2*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]**2
                                                                            + pixel_size**2*colden_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]**2)
+
+
 
 
     else:
@@ -486,9 +511,9 @@ def mass_map(colden,
                     #
                     ############################################################
 
-                    mass[0].data[idx_dec, idx_ra] = (pixel_size*colden[0].data[idx_dec, idx_ra]*hydro_mass)/abundance_ratio
+                    mass[0].data[idx_dec, idx_ra] = (pixel_size*colden[0].data[idx_dec, idx_ra]*element_mass)/abundance_ratio
 
-                    mass_err[0].data[idx_dec, idx_ra] = hydro_mass/abundance_ratio\
+                    mass_err[0].data[idx_dec, idx_ra] = element_mass/abundance_ratio\
                                                       * np.sqrt(pixel_size_err**2*colden[0].data[idx_dec, idx_ra]**2
                                                       + pixel_size**2*colden_err[0].data[idx_dec, idx_ra]**2)
 
@@ -536,3 +561,12 @@ def optical_depth_map(main_map,
 
 
     return tau_map, tau_err_map
+
+
+def excitation_temperatur(temp_mb, line = 'co(3-2)'):
+
+    if line == 'co(3-2)':
+
+        temp_ex = 16.6/np.log(1+16.6/temp_mb)
+
+    return temp_ex
