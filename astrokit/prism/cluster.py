@@ -227,3 +227,39 @@ def spectra_clustering(cube,
 
 
     return mode_signal_mean, mode_signal_std, domain_map
+
+
+def cluster_average(cube, cluster_map, weight_map = None):
+
+    cluster_num = len(cluster_map)
+    len_ax3 = cube[0].header['NAXIS3']
+    cluster_spect = np.zeros([cluster_num, len_ax3])
+
+    if weight_map:
+
+        for cluster in range(cluster_num):
+
+            cube_mask = copy.deepcopy(cube)
+            weight_mask = copy.deepcopy(weight_map)
+
+            cube_mask[0].data[:, cluster_map[cluster][0].data == 0.] = 0.
+            weight_mask[0].data[cluster_map[cluster][0].data == 0.] = 0.
+
+            for vel in range(len_ax3):
+
+                cluster_spect[cluster, vel] =\
+                np.sum(cube_mask[0].data[vel, :] * weight_mask[0].data)/np.sum(weight_mask[0].data)
+
+    else:
+
+        for cluster in range(cluster_num):
+
+            cube_mask = copy.deepcopy(cube)
+
+            cube_mask[0].data[:, cluster_map[cluster][0].data == 0.] = 0.
+
+            for vel in range(len_ax3):
+
+                cluster_spect[cluster, vel] = np.sum(cube_mask[0].data[vel, :])/np.sum(cluster_map[cluster][0].data)
+
+    return cluster_spect
