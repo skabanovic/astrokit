@@ -94,3 +94,13 @@ def gauss_inten(amp, width, amp_err, width_err, width_type = 'FWHM'):
     inten_err = np.sqrt(2.*np.pi)* np.sqrt( (amp*width_err)**2+(amp_err*width)**2 )
 
     return inten, inten_err
+
+def polynom(order, axis, *const):
+
+    poly_sum = np.zeros_like(axis)
+
+    for power in range(order+1):
+
+        poly_sum = poly_sum + const[power]*axis**power
+
+    return poly_sum
