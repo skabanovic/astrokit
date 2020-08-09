@@ -33,6 +33,12 @@ def line_profile(vel = None,
 
         freq_0 = 345.79598990e9
 
+    elif line == '13co(3-2)':
+
+        # 13CO (3-2) rest frequency [Hz]
+
+        freq_0 = 330.58796500e9
+
     elif line == '12co(4-3)':
 
         # 12CO (4-3) rest frequency [Hz]
@@ -265,9 +271,15 @@ def brightness_temperatur(temp_ex, line = 'cii'):
 
         freq_0 = 1900.5369e9
 
-    if line=='12co(3-2)':
-        
+    elif line=='12co(3-2)':
+
         freq_0 = 345.79598990e9
+
+    elif line == '13co(3-2)':
+
+        # 13CO (3-2) rest frequency [Hz]
+
+        freq_0 = 330.58796500e9
 
 
     temp_0 = (const.h.value * freq_0)/const.k_B.value
@@ -284,15 +296,15 @@ def brightness_temperatur(temp_ex, line = 'cii'):
 #
 #############################################################
 
-def excitation_temperatur(temp_mb, line = 'cii'):
-
-    if line=='cii':
-
-        freq_0 = 1900.5369e9
-
-    temp_0 = (const.h.value * freq_0)/const.k_B.value
-
-    return (temp_0/(np.log((temp_0/temp_mb) + 1.)))
+#def excitation_temperatur(temp_mb, line = 'cii'):
+#
+#    if line=='cii':
+#
+#        freq_0 = 1900.5369e9
+#
+#    temp_0 = (const.h.value * freq_0)/const.k_B.value
+#
+#    return (temp_0/(np.log((temp_0/temp_mb) + 1.)))
 
 #############################################################
 #
