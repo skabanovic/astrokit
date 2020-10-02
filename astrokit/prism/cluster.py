@@ -9,7 +9,7 @@ def cluster_information(cube,
                         cluster_range,
                         methode = 'BIC',
                         reduce_dim = 'pca',
-                        pca_norm = 'mean',
+                        norm = 'mean',
                         gmm_iter = 1000,
                         sample = None):
 
@@ -36,10 +36,10 @@ def cluster_information(cube,
         # PCA will assume that the dataset has zero mean
         # We need to standardize each spectra
 
-        if pca_norm == 'mean':
+        if norm == 'mean':
             normed_flat_data = flat_data - np.mean(flat_data, axis = 0)
 
-        elif pca_norm == 'std':
+        elif norm == 'std':
             normed_flat_data = (flat_data - np.mean(flat_data,axis = 0))/np.std(flat_data,axis = 0)
 
         # we are asking to reduce the dimensionality and still retain 99% of the dataset variance
@@ -50,9 +50,56 @@ def cluster_information(cube,
         print('PCA done')
         print('Feature space is reduced from '+str(dim_ax3)+' to '+str(np.shape(reduced_data)[1])+' dimensions')
 
-    else:
+    elif reduce_dim == 'original':
 
-        reduced_data = flat_data
+        normed_flat_data = np.zeros_like(flat_data)
+
+        if norm == 'mean':
+
+            normed_flat_data = flat_data - np.mean(flat_data, axis = 0)
+
+        elif norm == 'max_scale':
+
+            for spect in range(len(flat_data)):
+
+                normed_flat_data[spect, :] = flat_data[spect, :]/np.max(flat_data[spect, :])
+
+        elif norm == 'length':
+
+            for spect in range(len(flat_data)):
+
+                normed_flat_data[spect, :] = flat_data[spect, :]/np.sqrt(np.sum(flat_data[spect, :]**2))
+
+        elif norm == 'intensity':
+
+            axis = 3
+            vel = astrokit.get_axis(axis, cube)
+
+            for spect in range(len(flat_data)):
+
+                normed_flat_data[spect, :] = flat_data[spect, :]/np.trapz(flat_data[spect, :], vel)
+
+
+        elif norm == 'std':
+
+            for i in range(len(normed_flat_data)):
+
+                normed_flat_data[i,:]= flat_data[i,:]/np.std(flat_data[i,:])
+
+        elif norm == 'z-score':
+
+            normed_flat_data = (flat_data - np.mean(flat_data,axis = 0))/np.std(flat_data,axis = 0)
+
+            #for i in range(len(normed_flat_data)):
+            #    normed_flat_data[i,:]= (flat_data[i,:] - np.mean(flat_data[i,:]))/np.std(flat_data[i,:])
+
+        else:
+
+            print('warning: continue without normalization of data')
+
+            normed_flat_data = flat_data
+
+        reduced_data = normed_flat_data
 
     # REMEMBER: things will slightly change if you ask for, say 10000 spectra.
 
@@ -106,35 +153,44 @@ def spectra_clustering(cube,
                        n_com,
                        gmm_iter = 1000,
                        reduce_dim = 'original',
-                       pca_norm = 'mean'):
+                       norm = 'mean'):
 
     # Dimension of the input cube
-    dim_ax1 = cube[0].header['NAXIS1'] # Points in Y/Dec axis
-    dim_ax2 = cube[0].header['NAXIS2'] # Points in X/RA axis
+    dim_ax1 = cube[0].header['NAXIS1'] # Points in X/RA axis
+    dim_ax2 = cube[0].header['NAXIS2'] # Points in Y/Dec axis
     dim_ax3 = cube[0].header['NAXIS3'] # Points in velocity
 
     # Check: if a grid point is masked with nan at velocity v it should be masked at all v
+    index_map = np.zeros([2, dim_ax2, dim_ax1])
+
     for idx_ax1 in range(dim_ax1):
         for idx_ax2 in range(dim_ax2):
+
+            index_map[0, idx_ax2, idx_ax1] = idx_ax1
+            index_map[1, idx_ax2, idx_ax1] = idx_ax2
+
             if np.isnan(np.sum(cube[0].data[:,idx_ax2, idx_ax1])):
+
                 cube[0].data[:,idx_ax2,idx_ax1] = np.nan
 
     # From a [dimV,dimY,dimX] array
     # to a list of (dimY x dimX) spectra of length dimV
+    flat_index_masked = index_map.reshape(2, dim_ax2*dim_ax1).transpose()
     flat_data_masked = cube[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
 
     # Consider only the points that are not masked
-    flat_data = flat_data_masked[~np.isnan(np.sum(flat_data_masked,axis=1))]
+    flat_index = flat_index_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
+    flat_data = flat_data_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
 
     if reduce_dim == 'pca':
 
         # PCA will assume that the dataset has zero mean
         # We need to standardize each spectra
 
-        if pca_norm == 'mean':
+        if norm == 'mean':
             normed_flat_data = flat_data - np.mean(flat_data, axis = 0)
 
-        elif pca_norm == 'std':
+        elif norm == 'z-score':
             normed_flat_data = (flat_data - np.mean(flat_data,axis = 0))/np.std(flat_data,axis = 0)
 
         # we are asking to reduce the dimensionality and still retain 99% of the dataset variance
@@ -147,7 +203,54 @@ def spectra_clustering(cube,
 
     elif reduce_dim == 'original':
 
-        reduced_data = flat_data
+        normed_flat_data = np.zeros_like(flat_data)
+
+        if norm == 'mean':
+
+            normed_flat_data = flat_data - np.mean(flat_data, axis = 0)
+
+        elif norm == 'max_scale':
+
+            for spect in range(len(flat_data)):
+
+                normed_flat_data[spect, :] = flat_data[spect, :]/np.max(flat_data[spect, :])
+
+        elif norm == 'length':
+
+            for spect in range(len(flat_data)):
+
+                normed_flat_data[spect, :] = flat_data[spect, :]/np.sqrt(np.sum(flat_data[spect, :]**2))
+
+        elif norm == 'intensity':
+
+            axis = 3
+            vel = astrokit.get_axis(axis, cube)
+
+            for spect in range(len(flat_data)):
+
+                normed_flat_data[spect, :] = flat_data[spect, :]/np.trapz(flat_data[spect, :], vel)
+
+
+        elif norm == 'std':
+
+            for i in range(len(normed_flat_data)):
+
+                normed_flat_data[i,:]= flat_data[i,:]/np.std(flat_data[i,:])
+
+        elif norm == 'z-score':
+
+            normed_flat_data = (flat_data - np.mean(flat_data,axis = 0))/np.std(flat_data,axis = 0)
+
+            #for i in range(len(normed_flat_data)):
+            #    normed_flat_data[i,:]= (flat_data[i,:] - np.mean(flat_data[i,:]))/np.std(flat_data[i,:])
+
+        else:
+
+            print('warning: continue without normalization of data')
+
+            normed_flat_data = flat_data
+
+        reduced_data = normed_flat_data
 
     gmm = GaussianMixture(n_components = n_com,
                           covariance_type='full',
@@ -157,109 +260,46 @@ def spectra_clustering(cube,
 
     labels = gmm.predict(reduced_data)
 
-    # Number of spectra
-    n_ts = np.shape(flat_data)[0]
+    domain_map = astrokit.zeros_map(cube)
 
-    # Step 2: go from index 1 to index n_com and find the respective nodes
-    # initialize
-    modes_indices = []
+    for label in range(len(labels)):
 
-    for i in range(n_com):
-        modes_indices.append(duplicates(labels, i))
-
+        domain_map[0].data[int(flat_index[label][1]), int(flat_index[label][0])] = labels[label]
 
     mode_signal_mean = []
     mode_signal_std = []
-    for i in range(len(modes_indices)):
-        # Extract the mode
-        extract_mode = np.array(flat_data)[modes_indices[i]]
-        # Compute the signal
-        signal = np.mean(extract_mode,axis=0)
-        # Compute the std
-        std = np.std(extract_mode,axis=0)
-        # Store the result
+
+    #labels_map = labels.reshape(dim_ax2, dim_ax1).transpose()
+
+    for i in range(n_com):
+
+        signal = np.mean(cube[0].data[:,domain_map[0].data==i], axis=1)
+        std = np.std(cube[0].data[:, domain_map[0].data==i], axis=1)
+
         mode_signal_mean.append(signal)
         mode_signal_std.append(std)
-
-    # Find the mapping
-    # mapping[i] will tell you the mapping from flat_data to flat_data_masked
-    # Specifically:
-    # flat_data[i] will correspond to an index mapping[i] = k, where k is such that flat_data_masked[k] == flat_data[i]
-    mapping = []
-
-    # From an array to a list
-    list_flat_data_masked = flat_data_masked.tolist()
-    list_flat_data = flat_data.tolist()
-
-    for i in range(len(flat_data)):
-        mapping.append(list_flat_data_masked.index(list_flat_data[i]))
-
-
-    # Here we store the domains maps (clusters embedded in the grid)
-    domains = []
-    for i in range(len(modes_indices)):
-
-        # Let's create a temporary spatial grid
-        data_grid  = cube[0].data[0,:,:].copy()
-        # Let's flatten it
-        flat_data_grid = data_grid.flatten()
-        # If is not a nan is a zero
-        flat_data_grid[~np.isnan(flat_data_grid)] = 0
-
-        for j in range(len(modes_indices[i])):
-
-            # set to 1 the pixel belonging to a domain
-            flat_data_grid[mapping[modes_indices[i][j]]] = 1
-
-        domains.append(flat_data_grid)
-
-
-    #  Gridded domains (just have to reshape the fucker)
-    #gridded_domains = np.zeros([dimY,dimX,len(domains)])
-
-    domain_map = []
-
-    for i in range(len(domains)):
-
-        gridded_domains = astrokit.zeros_map(cube)
-        gridded_domains[0].data = domains[i].reshape(dim_ax2, dim_ax1)
-        domain_map.append(copy.deepcopy(gridded_domains))
-
 
     return mode_signal_mean, mode_signal_std, domain_map
 
 
-def cluster_average(cube, cluster_map, weight_map = None):
+def cluster_average(cube,
+                    cluster_map,
+                    weight_map = None):
 
-    cluster_num = len(cluster_map)
+    cluster_num = int(np.max(cluster_map[0].data)) +1
     len_ax3 = cube[0].header['NAXIS3']
     cluster_spect = np.zeros([cluster_num, len_ax3])
 
-    if weight_map:
 
-        for cluster in range(cluster_num):
+    for cluster in range(cluster_num):
 
-            cube_mask = copy.deepcopy(cube)
-            weight_mask = copy.deepcopy(weight_map)
+        if weight_map:
 
-            cube_mask[0].data[:, cluster_map[cluster][0].data == 0.] = 0.
-            weight_mask[0].data[cluster_map[cluster][0].data == 0.] = 0.
+            cluster_spect[cluster, :] = np.average(cube[0].data[:, cluster_map[0].data == cluster],
+                                                   weights = weight_map[0].data[cluster_map[0].data == cluster], axis = 1)
+        else:
 
-            for vel in range(len_ax3):
+            cluster_spect[cluster, :] = np.average(cube[0].data[:, cluster_map[0].data == cluster], axis = 1)
 
-                cluster_spect[cluster, vel] =\
-                np.sum(cube_mask[0].data[vel, :] * weight_mask[0].data)/np.sum(weight_mask[0].data)
-
-    else:
-
-        for cluster in range(cluster_num):
-
-            cube_mask = copy.deepcopy(cube)
-
-            cube_mask[0].data[:, cluster_map[cluster][0].data == 0.] = 0.
-
-            for vel in range(len_ax3):
-
-                cluster_spect[cluster, vel] = np.sum(cube_mask[0].data[vel, :])/np.sum(cluster_map[cluster][0].data)
 
     return cluster_spect
