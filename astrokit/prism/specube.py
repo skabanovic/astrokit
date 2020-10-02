@@ -342,6 +342,8 @@ def moment_N(order, hdul, noise_level = 1.0e-6):
         if not (attribute == ''):
             if (attribute[-1] == '3'):
                 del moment_0[0].header[attribute]
+            elif (attribute == 'WCSAXES'):
+                moment_0[0].header['WCSAXES'] = 2
 
     moment_0[0].header['NAXIS']=2
 
@@ -540,6 +542,8 @@ def rms_map(hdul, window=None, rms_range=None):
         if not (attribute == ''):
             if (attribute[-1] == '3'):
                 del hdul_rms[0].header[attribute]
+            elif (attribute == 'WCSAXES'):
+                hdul_rms[0].header['WCSAXES'] = 2
 
     hdul_rms[0].header['NAXIS']=2
 
@@ -657,7 +661,7 @@ def noise_intensity_map(vel_min, vel_max, hdul):
 #
 #############################################################
 
-def average_cube(hdul_inp, sigma=0, weight='none'):
+def average_cube(hdul_inp, weight = None):
 
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
@@ -667,11 +671,19 @@ def average_cube(hdul_inp, sigma=0, weight='none'):
     # of the input spectral cube ()hdul
     spect_aver[0].header = copy.deepcopy(hdul_inp[0].header)
 
-    spect_aver[0].header['CTYPE1'] = hdul_inp[0].header['CTYPE3']
-    spect_aver[0].header['CRVAL1'] = hdul_inp[0].header['CRVAL3']
-    spect_aver[0].header['CDELT1'] = hdul_inp[0].header['CDELT3']
-    spect_aver[0].header['CRPIX1'] = hdul_inp[0].header['CRPIX3']
-    spect_aver[0].header['CROTA1'] = hdul_inp[0].header['CROTA3']
+    # remove 3D and 2D attributes from header
+    for attribute in list(hdul_inp[0].header.keys()):
+        if not (attribute == ''):
+            if (attribute[-1] == '3'):
+                spect_aver[0].header[attribute[:-1]+'1'] = hdul_inp[0].header[attribute[:-1]+'3']
+            elif (attribute == 'WCSAXES'):
+                spect_aver[0].header['WCSAXES'] = 1
+
+    #spect_aver[0].header['CTYPE1'] = hdul_inp[0].header['CTYPE3']
+    #spect_aver[0].header['CRVAL1'] = hdul_inp[0].header['CRVAL3']
+    #spect_aver[0].header['CDELT1'] = hdul_inp[0].header['CDELT3']
+    #spect_aver[0].header['CRPIX1'] = hdul_inp[0].header['CRPIX3']
+    #spect_aver[0].header['CROTA1'] = hdul_inp[0].header['CROTA3']
 
     # remove 3D and 2D attributes from header
     for attribute in list(spect_aver[0].header.keys()):
@@ -690,7 +702,20 @@ def average_cube(hdul_inp, sigma=0, weight='none'):
     len_ax1 = len(hdul_inp[0].data[0,:,0])
     len_ax2 = len(hdul_inp[0].data[0,0,:])
 
-    if weight == 'none':
+    if weight:
+
+        weight_sum=0.
+
+        for idx1 in range(len_ax1):
+            for idx2 in range(len_ax2):
+                if not (weight[0].data[idx1, idx2] == 0):
+
+                    weight_sum += weight[0].data[idx1, idx2]
+                    spect_aver[0].data[:] += hdul_inp[0].data[:, idx1, idx2] * weight[0].data[idx1, idx2]
+
+        spect_aver[0].data = spect_aver[0].data/weight_sum
+
+    else:
 
         spect_count=0.
 
@@ -702,25 +727,9 @@ def average_cube(hdul_inp, sigma=0, weight='none'):
 
         spect_aver[0].data = spect_aver[0].data/spect_count
 
-        return spect_aver
 
-    elif weight == 'rms':
-        weight_sum=0.
+    return spect_aver
 
-        for idx1 in range(len_ax1):
-            for idx2 in range(len_ax2):
-                if not (sigma[0].data[idx1, idx2]==0):
-
-                    weight = 1./sigma[0].data[idx1, idx2]**2
-                    weight_sum += weight
-                    spect_aver[0].data[:] += hdul_inp[0].data[:, idx1, idx2]*weight
-
-        spect_aver[0].data = spect_aver[0].data/weight_sum
-
-        return spect_aver
-
-    else:
-        print("error: no valid weight is set")
 
 def average_volume(hdul_inp, pos, shape, radius = None, radius_2 = None,
                    width = None, height = None, weight = None):
@@ -976,17 +985,19 @@ def zeros_cube(hdul):
 
     return empty_cube
 
-def pi_diagram(path, hdul, beam = 0):
+def pi_diagram(path, hdul, radius = None):
 
     intens = np.zeros_like(path[0,:])
 
-    if beam == 0:
+    if radius:
 
-        beam = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/2.)*u.deg)
+        radius = Angle(radius*u.arcsec)
 
     else:
 
-        beam = Angle(beam*u.arcsec)
+        radius = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)*u.deg)
+
+
 
     grid2d_ax1, grid2d_ax2 = get_grid(hdul)
 
@@ -996,7 +1007,7 @@ def pi_diagram(path, hdul, beam = 0):
         grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+(grid2d_ax1-path[0, pos])**2)
 
         # define relativ radius (3*sigma)
-        sig3_r=3.*beam.deg
+        sig3_r= radius.deg
 
         # find relavant coordinat values
         grid2d_sig3 = grid2d_r[np.where( grid2d_r < sig3_r )]
@@ -1006,7 +1017,7 @@ def pi_diagram(path, hdul, beam = 0):
         weight_sum = 0.
         for idx_beam in range(len(idx_sig3[0,:])):
 
-            weight = curve.gauss_2d(beam.deg, path[0, pos], path[1, pos], \
+            weight = curve.gauss_2d(radius.deg, path[0, pos], path[1, pos], \
                            grid2d_ax1[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]], \
                            grid2d_ax2[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]])
             intens[pos] = intens[pos]+\
@@ -1017,17 +1028,42 @@ def pi_diagram(path, hdul, beam = 0):
 
     return intens
 
-def pv_diagram(path, hdul, beam = 0):
 
-    spectra=np.zeros([len(path[0,:]),len(hdul[0].data[:,0,0])])
+def pv_diagram(path,
+               hdul,
+               path_dist,
+               radius = None):
 
-    if beam == 0:
+    #spectra=np.zeros([len(path[0,:]),len(hdul[0].data[:,0,0])])
 
-        beam = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/2.)*u.deg)
+    axis=3
+    vel = get_axis(axis, hdul)/1e3
+
+    diagram_size = np.zeros([len(vel), len(path_dist)])
+    hdu = fits.PrimaryHDU(diagram_size)
+    empty_diagram = fits.HDUList([hdu])
+
+    empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
+    empty_diagram[0].header['CRVAL1'] = path_dist[0]
+    empty_diagram[0].header['CDELT1'] = path_dist[1]-path_dist[0]
+    empty_diagram[0].header['CRPIX1'] = 0.0
+
+    empty_diagram[0].header['CTYPE2'] = hdul[0].header['CTYPE3']
+    empty_diagram[0].header['CRVAL2'] = hdul[0].header['CRVAL3']
+    empty_diagram[0].header['CDELT2'] = hdul[0].header['CDELT3']
+    empty_diagram[0].header['CRPIX2'] = hdul[0].header['CRPIX3']
+
+    empty_diagram[0].header['OBJECT'] = hdul[0].header['OBJECT']
+    empty_diagram[0].header['LINE'] = hdul[0].header['LINE']
+
+    if radius:
+
+        radius = Angle(radius*u.arcsec)
 
     else:
 
-        beam = Angle(beam*u.arcsec)
+        radius = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)*u.deg)
+
 
     grid2d_ax1, grid2d_ax2 = get_grid(hdul)
 
@@ -1037,7 +1073,7 @@ def pv_diagram(path, hdul, beam = 0):
         grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+(grid2d_ax1-path[0, pos])**2)
 
         # define relativ radius (3*sigma)
-        sig3_r=3.*beam.deg
+        sig3_r = radius.deg
 
         # find relavant coordinat values
         grid2d_sig3=grid2d_r[np.where( grid2d_r < sig3_r )]
@@ -1048,19 +1084,19 @@ def pv_diagram(path, hdul, beam = 0):
 
         for idx_beam in range(len(idx_sig3[0,:])):
 
-            weight=curve.gauss_2d(beam.deg, path[0,pos], path[1,pos], \
+            weight=curve.gauss_2d(radius.deg, path[0,pos], path[1,pos], \
                                  grid2d_ax1[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]], \
                                  grid2d_ax2[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]])
 
-            spectra[pos, :]=spectra[pos, :]+\
+            empty_diagram[0].data[:, pos] = empty_diagram[0].data[:, pos]+\
             hdul[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]*weight
 
             weight_sum=weight_sum+weight
 
 
-        spectra[pos,:] = spectra[pos,:]/weight_sum
+        empty_diagram[0].data[:, pos] = empty_diagram[0].data[:, pos]/weight_sum
 
-    return spectra
+    return empty_diagram
 
 def correlation_velocity(hdul_i, hdul_ii):
 

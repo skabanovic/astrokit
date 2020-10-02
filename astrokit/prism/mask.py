@@ -271,7 +271,10 @@ def fix_dim(dim, hdul_inp):
 
     return hdul_out
 
-def extract_subcube(hdul_inp, pos_cent, width, height):
+def extract_subcube(hdul_inp,
+                    pos_cent,
+                    width,
+                    height):
 
     # header information for axis = 1,2
     axis_len = np.zeros(2, dtype=int)
@@ -366,6 +369,64 @@ def extract_subcube(hdul_inp, pos_cent, width, height):
 
     return hdul_extract
 
+def chop_edges(input_hdul,
+               pix_ax1,
+               pix_ax2):
+
+    input_dim = input_hdul[0].header['NAXIS']
+
+    if input_dim == 3:
+
+        cube_size = np.zeros_like(input_hdul[0].data[:, pix_ax2[0]:-pix_ax2[1], pix_ax1[0]:-pix_ax1[1]])
+
+    elif input_dim == 2:
+
+        cube_size = np.zeros_like(input_hdul[0].data[pix_ax2[0]:-pix_ax2[1], pix_ax1[0]:-pix_ax1[1]])
+
+    hdu = fits.PrimaryHDU(cube_size)
+    output_hdul = fits.HDUList([hdu])
+
+    # the output hdulist (map_intg) is geting the header information
+    # of the input spectral cube ()hdul
+    output_hdul[0].header = copy.deepcopy(input_hdul[0].header)
+
+
+    if input_dim == 3:
+
+        output_hdul[0].data = copy.deepcopy(input_hdul[0].data[:, pix_ax2[0]:-pix_ax2[1], pix_ax1[0]:-pix_ax1[1]])
+        output_hdul[0].header['NAXIS2'] = len(output_hdul[0].data[0,:,0])
+        output_hdul[0].header['NAXIS1'] = len(output_hdul[0].data[0,0,:])
+
+    if input_dim == 2:
+
+        output_hdul[0].data = copy.deepcopy(input_hdul[0].data[pix_ax2[0]:-pix_ax2[1], pix_ax1[0]:-pix_ax1[1]])
+        output_hdul[0].header['NAXIS2'] = len(output_hdul[0].data[:,0])
+        output_hdul[0].header['NAXIS1'] = len(output_hdul[0].data[0,:])
+
+    # step size of axis
+    step_size_ax1   = output_hdul[0].header['CDELT1']
+
+    # value of reference grid position of axis
+    ref_value_ax1   = output_hdul[0].header['CRVAL1']
+
+    # step size of axis
+    step_size_ax2   = output_hdul[0].header['CDELT2']
+
+    # value of reference grid position of axis
+    ref_value_ax2   = output_hdul[0].header['CRVAL2']
+
+    axis = 1
+    grid_ax1 = astrokit.get_axis(axis, input_hdul)
+
+    axis = 2
+    grid_ax2 = astrokit.get_axis(axis, input_hdul)
+
+    output_hdul[0].header['CRPIX1'] = (ref_value_ax1 - grid_ax1[pix_ax1[0]])/step_size_ax1
+
+    output_hdul[0].header['CRPIX2'] = (ref_value_ax2 - grid_ax2[pix_ax2[0]])/step_size_ax2
+
+    return output_hdul
+
 def resample(hdul_inp, vel_res):
 
     hdul_inp[0].data=np.nan_to_num(hdul_inp[0].data)
@@ -418,3 +479,68 @@ def resample(hdul_inp, vel_res):
 
 
     return hdul_out
+
+def empty_grid(grid_ax1 = None,
+               grid_ax2 = None,
+               grid_ax3 = None,
+               ref_value_ax1 = None,
+               ref_value_ax2 = None,
+               ref_value_ax3 = None,
+               beam_maj = None,
+               beam_min = None):
+
+    len_ax1 = len(grid_ax1)
+    len_ax2 = len(grid_ax2)
+
+    if ref_value_ax3 or ref_value_ax3 == 0:
+
+        len_ax3 = len(grid_ax3)
+
+        cube_size = np.zeros([len_ax3, len_ax2, len_ax1])
+
+    else:
+
+        cube_size = np.zeros([len_ax2, len_ax1])
+
+    hdu = fits.PrimaryHDU(cube_size)
+    output_hdul = fits.HDUList([hdu])
+
+    # step size of axis
+    step_size_ax1   = grid_ax1[1] - grid_ax1[0]
+
+    # value of reference grid position of axis
+    ref_value_ax1   = ref_value_ax1
+
+    # step size of axis
+    step_size_ax2   = grid_ax2[1] - grid_ax2[0]
+
+    # value of reference grid position of axis
+    ref_value_ax2   = ref_value_ax2
+
+    output_hdul[0].header["NAXIS1"] = len_ax1
+    output_hdul[0].header["CDELT1"] = step_size_ax1
+    output_hdul[0].header["CRVAL1"] = ref_value_ax1
+    output_hdul[0].header["CRPIX1"] = (ref_value_ax1 - grid_ax1[0])/step_size_ax1
+
+    output_hdul[0].header["NAXIS2"] = len_ax2
+    output_hdul[0].header["CDELT2"] = step_size_ax2
+    output_hdul[0].header["CRVAL2"] = ref_value_ax2
+    output_hdul[0].header["CRPIX2"] = (ref_value_ax2 - grid_ax2[0])/step_size_ax2
+
+    output_hdul[0].header["BMAJ"] = beam_maj
+    output_hdul[0].header["BMIN"] = beam_min
+
+    if ref_value_ax3 or ref_value_ax3 == 0:
+
+        # step size of axis
+        step_size_ax3   = grid_ax3[1] - grid_ax3[0]
+
+        # value of reference grid position of axis
+        ref_value_ax3   = ref_value_ax3
+
+        output_hdul[0].header["NAXIS3"] = len_ax3
+        output_hdul[0].header["CDELT3"] = step_size_ax3
+        output_hdul[0].header["CRVAL3"] = ref_value_ax3
+        output_hdul[0].header["CRPIX3"] = (ref_value_ax3 - grid_ax3[0])/step_size_ax3
+
+    return output_hdul
