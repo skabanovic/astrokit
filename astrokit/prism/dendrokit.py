@@ -40,7 +40,22 @@ def find_struct(dendro, struct_type="leaf"):
 
 
 
-def struct_average(hdul, dendro, weight_map = None,  struct_type="leaf", weight = False):
+def struct_average(hdul,
+                   dendro,
+                   weight_map = None,
+                   struct_type="leaf",
+                   weight = False,
+                   dim = 2):
+
+    if dim == 2:
+
+        idx_1 = 0
+        idx_2 = 1
+
+    elif dim == 3:
+
+        idx_1 = 1
+        idx_2 = 2
 
     if struct_type == "leaf" or struct_type == "branch":
 
@@ -65,13 +80,13 @@ def struct_average(hdul, dendro, weight_map = None,  struct_type="leaf", weight 
             if weight :
 
                 struct_spect[struct, ax] = \
-                np.sum(hdul[0].data[ax,hdul_idx[0][:],hdul_idx[1][:]]\
-                *weight_map[0].data[hdul_idx[0][:],hdul_idx[1][:]])/np.sum(weight_map[0].data[hdul_idx[0][:],hdul_idx[1][:]])
+                np.sum(hdul[0].data[ax,hdul_idx[idx_1][:],hdul_idx[idx_2][:]]\
+                *weight_map[0].data[hdul_idx[idx_1][:],hdul_idx[idx_2][:]])/np.sum(weight_map[0].data[hdul_idx[idx_1][:],hdul_idx[idx_2][:]])
 
             else:
 
                 struct_spect[struct, ax] = \
-                np.sum(hdul[0].data[ax,hdul_idx[0][:],hdul_idx[1][:]])/(len(hdul_idx[0][:]))
+                np.sum(hdul[0].data[ax,hdul_idx[idx_1][:],hdul_idx[idx_2][:]])/(len(hdul_idx[idx_1][:]))
 
     return struct_spect
 
