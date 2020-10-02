@@ -108,14 +108,20 @@ def tau_spect(spect,
               error_ratio = 0.,
               spect_iso = [],
               vel_iso = [],
-              use_axis = 'none'):
+              iso_rms = None,
+              use_axis = 'none',
+              tau_max = 30):
 
 
-    if len(spect_iso) == 0:
+    if  len(spect_iso) == 0:
         spect_iso = spect
 
     if len(vel_iso) == 0:
         vel_iso = vel
+
+    if not iso_rms:
+        iso_rms = spect_rms
+
 
     if vel_min and vel_max:
 
@@ -168,8 +174,9 @@ def tau_spect(spect,
                                              Tmb, spect_rms,
                                              error_ratio = error_ratio,
                                              error_main= spect_rms,
-                                             error_iso = spect_rms,
-                                             method = "bisection")
+                                             error_iso = iso_rms,
+                                             method = "bisection",
+                                             tau_max = tau_max)
 
 
 
@@ -180,8 +187,9 @@ def tau_spect(spect,
                                              spect[idx_min+vel_idx], spect_rms,
                                              error_ratio = error_ratio,
                                              error_main= spect_rms,
-                                             error_iso = spect_rms,
-                                             method = "bisection")
+                                             error_iso = iso_rms,
+                                             method = "bisection",
+                                             tau_max = tau_max)
 
         else:
 
@@ -192,8 +200,9 @@ def tau_spect(spect,
                                              Tmb, spect_iso[vel_idx],
                                              error_ratio = error_ratio,
                                              error_main= spect_rms,
-                                             error_iso = spect_rms,
-                                             method = "bisection")
+                                             error_iso = iso_rms,
+                                             method = "bisection",
+                                             tau_max = tau_max)
 
             else:
 
@@ -203,8 +212,9 @@ def tau_spect(spect,
                                              spect[idx_min+vel_idx], Tmb,
                                              error_ratio = error_ratio,
                                              error_main= spect_rms,
-                                             error_iso = spect_rms,
-                                             method = "bisection")
+                                             error_iso = iso_rms,
+                                             method = "bisection",
+                                             tau_max = tau_max)
 
 
     return tau, error_tau
@@ -232,7 +242,7 @@ def hyperfine_avarage(spect, vel,
             Tmb_temp[hyper_line] = astrokit.get_value(vel[idx_min+vel_idx]+vel_shift[hyper_line], vel, spect)\
                                  * weight[hyper_line]
 
-        Tmb_hyper[vel_idx] = sum(Tmb_temp)/sum(weight**2)
+        Tmb_hyper[vel_idx] = sum(Tmb_temp)/sum(weight)
 
 
     return Tmb_hyper, vel_hyper
@@ -255,16 +265,18 @@ def inten_to_colden(inten, Tex=None, inten_err = 0, line = 'cii'):
 
             const_term = (1+(2./4.)*np.exp(T_0/Tex))* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
 
-            colden = const_term*inten
-
 
         else:
 
             const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
 
-            colden = const_term*inten
+    if line == 'co(3-2)':
 
-        colden_err = const_term*inten_err
+        const_term = 1.58e13*(Tex+0.88)*np.exp(31.7/Tex)
+
+    colden = const_term*inten
+
+    colden_err = const_term*inten_err
 
     return colden, colden_err
 
@@ -280,6 +292,10 @@ def colden_to_mass(colden,
 
         # hydrogen mass
         element_mass = 1.6735575e-27
+
+    elif line == 'h2':
+
+        element_mass = 2.*1.6735575e-27
 
     elif line == 'cii':
 
@@ -307,6 +323,23 @@ def inten_to_flux(inten, line, inten_err=0):
         # cii rest frequency in [Hz]
         freq = 1900.5369e9
 
+    elif line == '12co(3-2)':
+
+        # 12CO (3-2) rest frequency [Hz]
+
+        freq = 345.79598990e9
+
+    elif line == '13co(3-2)':
+
+        # 13CO (3-2) rest frequency [Hz]
+
+        freq = 330.58796500e9
+
+    elif line == '12co(4-3)':
+
+        # 12CO (4-3) rest frequency [Hz]
+        freq = 461.0406e9
+
     const_flux = 2.*const.k_B.value*(freq**3/const.c.value**3)
 
     flux = inten*const_flux
@@ -314,10 +347,15 @@ def inten_to_flux(inten, line, inten_err=0):
 
     return flux, flux_err
 
-def line_luminosity(inten, line, dist = None, area = None,
-                    dist_err=0, area_err=None, inten_err=0):
+def line_luminosity(inten,
+                    line,
+                    dist = None,
+                    area = None,
+                    dist_err=0,
+                    area_err=None,
+                    inten_err=0):
 
-        flux, flux_err = inten_to_flux(inten, line, inten_err )
+        flux, flux_err = inten_to_flux(inten, line, inten_err)
 
         if dist:
             # if intput id flux
@@ -364,7 +402,7 @@ def colden_map(inten,
        # equivalent temperature of the excited level
         temp_0 = (const.h.value*freq_cii)/const.k_B.value
 
-        if Tex:
+        if temp_ex:
 
             const_term = (1+(2./4.)*np.exp(temp_0/temp_ex))* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
 
@@ -567,6 +605,6 @@ def excitation_temperatur(temp_mb, line = 'co(3-2)'):
 
     if line == 'co(3-2)':
 
-        temp_ex = 16.6/np.log(1+16.6/temp_mb)
+        temp_ex = 16.6/np.log(1+16.6/(temp_mb+0.036))
 
     return temp_ex
