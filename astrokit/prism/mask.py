@@ -327,8 +327,8 @@ def extract_subcube(hdul_inp,
     axis_len[1] = idx_ax2[1]-idx_ax2[0]
 
     # determine the reference position of axis=1,2
-    ref_pos[0] = (ref_value[0]-pos_ax1[0])/step_size[0]
-    ref_pos[1] = (ref_value[1]-pos_ax2[0])/step_size[1]
+    ref_pos[0] = 1. - (pos_ax1[0] - ref_value[0])/step_size[0]
+    ref_pos[1] = 1. - (pos_ax2[0] - ref_value[1])/step_size[1]
 
     dim_inp = hdul_inp[0].header['NAXIS']
 
@@ -421,9 +421,9 @@ def chop_edges(input_hdul,
     axis = 2
     grid_ax2 = astrokit.get_axis(axis, input_hdul)
 
-    output_hdul[0].header['CRPIX1'] = (ref_value_ax1 - grid_ax1[pix_ax1[0]])/step_size_ax1
+    output_hdul[0].header['CRPIX1'] = 1. - (grid_ax1[pix_ax1[0]] - ref_value_ax1)/step_size_ax1
 
-    output_hdul[0].header['CRPIX2'] = (ref_value_ax2 - grid_ax2[pix_ax2[0]])/step_size_ax2
+    output_hdul[0].header['CRPIX2'] = 1. - (grid_ax2[pix_ax2[0]] - ref_value_ax2)/step_size_ax2
 
     return output_hdul
 
@@ -453,7 +453,7 @@ def resample(hdul_inp, vel_res):
 
     hdul_out[0].header["NAXIS3"] = axis_len_out
     hdul_out[0].header["CDELT3"] = step_size_out
-    hdul_out[0].header["CRVAL3"] = vel_out[0] + ref_pos_inp*step_size_out
+    hdul_out[0].header["CRVAL3"] = vel_out[0] - (1. - ref_pos_inp) * step_size_out
 
     if (step_size_inp >= step_size_out):
 
@@ -520,12 +520,12 @@ def empty_grid(grid_ax1 = None,
     output_hdul[0].header["NAXIS1"] = len_ax1
     output_hdul[0].header["CDELT1"] = step_size_ax1
     output_hdul[0].header["CRVAL1"] = ref_value_ax1
-    output_hdul[0].header["CRPIX1"] = (ref_value_ax1 - grid_ax1[0])/step_size_ax1
+    output_hdul[0].header["CRPIX1"] = 1. - (grid_ax1[0] - ref_value_ax1)/step_size_ax1
 
     output_hdul[0].header["NAXIS2"] = len_ax2
     output_hdul[0].header["CDELT2"] = step_size_ax2
     output_hdul[0].header["CRVAL2"] = ref_value_ax2
-    output_hdul[0].header["CRPIX2"] = (ref_value_ax2 - grid_ax2[0])/step_size_ax2
+    output_hdul[0].header["CRPIX2"] = 1. - (grid_ax2[0] - ref_value_ax2)/step_size_ax2
 
     output_hdul[0].header["BMAJ"] = beam_maj
     output_hdul[0].header["BMIN"] = beam_min
@@ -541,6 +541,6 @@ def empty_grid(grid_ax1 = None,
         output_hdul[0].header["NAXIS3"] = len_ax3
         output_hdul[0].header["CDELT3"] = step_size_ax3
         output_hdul[0].header["CRVAL3"] = ref_value_ax3
-        output_hdul[0].header["CRPIX3"] = (ref_value_ax3 - grid_ax3[0])/step_size_ax3
+        output_hdul[0].header["CRPIX3"] = 1. - (grid_ax3[0] - ref_value_ax3)/step_size_ax3
 
     return output_hdul
