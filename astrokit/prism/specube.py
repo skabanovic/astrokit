@@ -58,7 +58,7 @@ def get_axis(axis, hdul):
     ref_value   = hdul[0].header["CRVAL" + str(axis)]
 
     # determine the grid axis points
-    grid_axis = (np.arange(axis_len) - ref_pos) * step_size + ref_value
+    grid_axis = (np.arange(1, axis_len+1) - ref_pos) * step_size + ref_value
 
     return grid_axis
 
@@ -115,8 +115,8 @@ def get_grid(hdul):
 
     w = WCS(hdul_inp[0].header)
 
-    pix_ra  = np.arange(0, hdul_inp[0].header['NAXIS1'], 1)
-    pix_dec = np.arange(0, hdul_inp[0].header['NAXIS2'], 1)
+    pix_ra  = np.arange(1, hdul_inp[0].header['NAXIS1']+1, 1)
+    pix_dec = np.arange(1, hdul_inp[0].header['NAXIS2']+1, 1)
 
     idx_grid_ra, idx_grid_dec = np.meshgrid(pix_ra, pix_dec, sparse=False, indexing='xy')
 
@@ -376,7 +376,7 @@ def moment_N(order, hdul, noise_level = 1.0e-6):
                                  /moment_0[0].data[idx_dec,idx_ra]
 
                         # determine moment 1
-                        moment_1[0].data[idx_dec,idx_ra]=np.trapz(vel_wei,vel[:])
+                        moment_1[0].data[idx_dec,idx_ra]=np.trapz(vel_wei, vel)
 
                     else:
                         # determine moment N weight
@@ -385,7 +385,7 @@ def moment_N(order, hdul, noise_level = 1.0e-6):
                                      /moment_0[0].data[idx_dec,idx_ra]
 
                         # determine moment N
-                        moment_N[0].data[idx_dec,idx_ra]=np.trapz(moment_wei,vel[:])
+                        moment_N[0].data[idx_dec,idx_ra]=np.trapz(moment_wei, vel)
 
                 else:
                     if (order==1):
