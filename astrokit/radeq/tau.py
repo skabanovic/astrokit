@@ -424,11 +424,11 @@ def colden_map(inten,
 
     elif line == 'co(3-2)':
 
-        colden[0].data = 1.58e13*(temp_ex[0].data+0.88)*np.exp(31.7/temp_ex[0].data)*inten[0].data
+        colden[0].data = 1.58e13*(temp_ex+0.88)*np.exp(31.7/temp_ex)*inten[0].data
 
         if inten_err:
 
-            colden_err[0].data = 1.58e13*(temp_ex[0].data+0.88)*np.exp(31.7/temp_ex[0].data)*inten_err[0].data
+            colden_err[0].data = 1.58e13*(temp_ex+0.88)*np.exp(31.7/temp_ex)*inten_err[0].data
 
         else:
 
