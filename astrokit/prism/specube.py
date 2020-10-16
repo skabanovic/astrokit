@@ -465,11 +465,11 @@ def chop_cube(vel_min, vel_max, hdul_inp):
     hdul_chop = fits.HDUList([hdu_chop])
     hdul_chop[0].header=copy.deepcopy(hdul_inp[0].header)
 
-    axis_len  = len(vel[idx_min:idx_max])
+    axis_len  = len(vel[idx_min : idx_max])
 
     ref_pos   = hdul_inp[0].header["CRPIX3"]
     step_size = hdul_inp[0].header["CDELT3"]
-    ref_value = vel_min*1e3+ref_pos*step_size
+    ref_value = vel_min * 1e3 - (1. - ref_pos) * step_size
 
     hdul_chop[0].header["NAXIS3"] = axis_len
     hdul_chop[0].header["CRVAL3"] = ref_value
@@ -585,8 +585,11 @@ def gauss_weight(pos_ra, pos_dec, width, sky_map):
     for dec in range(len_dec):
         for ra in range(len_ra):
 
-            weight[0].data[dec, ra] =  curve.gauss_2d(width, pos_ra, pos_dec,
-                                                grid2d_ra[dec, ra], grid2d_dec[dec, ra])
+            weight[0].data[dec, ra] =  curve.gauss_2d(width,
+                                                      pos_ra,
+                                                      pos_dec,
+                                                      grid2d_ra[dec, ra],
+                                                      grid2d_dec[dec, ra])
 
     return weight
 
@@ -600,7 +603,6 @@ def rm_borders(hdul, wei_map, wei_min):
     elif dim ==2:
         hdul_new[0].data[idx_dec, wei_map[0].data<wei_min] = np.nan
     return hdul_new
-
 
 def noise_intensity(vel_min, vel_max,  vel, spect):
 
@@ -637,7 +639,6 @@ def noise_intensity_map(vel_min, vel_max, hdul):
 
     noise_map[0].header['NAXIS']=2
 
-
     axis=3
     vel = get_axis(axis, hdul)/1e3
 
@@ -646,7 +647,10 @@ def noise_intensity_map(vel_min, vel_max, hdul):
 
     for idx1 in range(len_ax1):
         for idx2 in range(len_ax2):
-            noise_map[0].data[idx1, idx2] = noise_intensity(vel_min, vel_max, vel, hdul[0].data[:, idx1, idx2])
+            noise_map[0].data[idx1, idx2] = noise_intensity(vel_min,
+                                                            vel_max,
+                                                            vel,
+                                                            hdul[0].data[:, idx1, idx2])
 
     return noise_map
 
@@ -730,9 +734,14 @@ def average_cube(hdul_inp, weight = None):
 
     return spect_aver
 
-
-def average_volume(hdul_inp, pos, shape, radius = None, radius_2 = None,
-                   width = None, height = None, weight = None):
+def average_volume(hdul_inp,
+                   pos,
+                   shape,
+                   radius = None,
+                   radius_2 = None,
+                   width = None,
+                   height = None,
+                   weight = None):
 
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
@@ -1043,11 +1052,17 @@ def pv_diagram(path,
     hdu = fits.PrimaryHDU(diagram_size)
     empty_diagram = fits.HDUList([hdu])
 
-    empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
-    empty_diagram[0].header['CRVAL1'] = path_dist[0]
-    empty_diagram[0].header['CDELT1'] = path_dist[1]-path_dist[0]
-    empty_diagram[0].header['CRPIX1'] = 0.0
+    empty_diagram[0].header['NAXIS1'] = len(path)
 
+    ref_pos = 0.
+    step_size = path_dist[1]-path_dist[0]
+
+    empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
+    empty_diagram[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
+    empty_diagram[0].header['CDELT1'] = step_size
+    empty_diagram[0].header['CRPIX1'] = ref_pos
+
+    empty_diagram[0].header['NAXIS1'] = hdul[0].header['NAXIS1']
     empty_diagram[0].header['CTYPE2'] = hdul[0].header['CTYPE3']
     empty_diagram[0].header['CRVAL2'] = hdul[0].header['CRVAL3']
     empty_diagram[0].header['CDELT2'] = hdul[0].header['CDELT3']
