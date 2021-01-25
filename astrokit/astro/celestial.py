@@ -24,6 +24,7 @@ def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_fra
     obj_coor = SkyCoord(ra=obj_pos1, dec=obj_pos2, distance = obj_dist, frame = coor_frame)
 
     gc_dist = 8178
+    #gc_dist = 7900
 
     gc_dist_err = 22
 
@@ -39,6 +40,30 @@ def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_fra
 
     gc2obj_err = np.sqrt(1./(4. * gc2obj_const) *(gc2obj_err_gc**2 * gc_dist_err**2 \
                                                    + gc2obj_err_obj**2*obj_dist_err.value**2))
+
+    return gc2obj_dist, gc2obj_err
+
+def galactic_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_frame = 'icrs'):
+
+    obj_coor = SkyCoord(ra=obj_pos1, dec=obj_pos2, distance = obj_dist, frame = coor_frame)
+
+    gc_dist = 8178
+    #gc_dist = 7900
+
+    gc_dist_err = 22
+
+    gc2obj_const = gc_dist**2 + obj_dist.value**2 - 2. * gc_dist*obj_dist.value \
+                 * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
+
+    gc2obj_dist = np.sqrt(gc2obj_const)
+
+    gc2obj_err_gc = 2. * gc_dist - 2. * obj_dist.value * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
+
+    gc2obj_err_obj = 2. * obj_dist.value \
+                     - 2. * gc_dist * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
+
+    gc2obj_err = np.sqrt(1./(4. * gc2obj_const) * ( gc2obj_err_gc**2 * gc_dist_err**2 \
+                                                   + gc2obj_err_obj**2 * obj_dist_err.value**2))
 
     return gc2obj_dist, gc2obj_err
 
@@ -79,7 +104,10 @@ def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all'):
 
         if star:
 
+            print(star[0])
+
             if sp_type == 'all' or sp_type == chr(star[0]):
+            #if sp_type == 'all' or sp_type == star[0]:
 
                 if not star_id[:] == query_table[obj]["MAIN_ID"]:
 
