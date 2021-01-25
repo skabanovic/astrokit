@@ -3,6 +3,7 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import astrokit
 
 def plot_histogram(axis, counts,
                    fontsize=18,
@@ -70,7 +71,9 @@ def plot_spectrum(vel, temp ,
         matplotlib.pyplot.savefig(img_path + img_name + '.' + img_format,\
                                   transparent = True, bbox_inches = 'tight', pad_inches = 0)
 
-def plot_map(sky_map, fontsize=18,
+def plot_map(sky_map,
+             fontsize=18,
+             figsize = (20, 18),
              vmin = None, vmax = None,
              ra_lable = 'RA (J2000)',
              dec_lable = 'Dec (J2000)',
@@ -82,7 +85,7 @@ def plot_map(sky_map, fontsize=18,
 
     wcs = WCS(sky_map[0].header)
 
-    fig = plt.figure(figsize=(25, 15))
+    fig = plt.figure(figsize = figsize)
     plt.subplot(projection=wcs)
     if (vmin and vmax) is not None:
         cax=plt.imshow(sky_map[0].data, origin='lower', vmin = vmin, vmax =vmax,
@@ -118,6 +121,7 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                       dec_lable = 'Dec (J2000)',
                       color_bar = 'Intensity [K$\,$km/s]',
                       color_map = 'Spectral_r',
+                      interpolation = 'none',
                       do_contour = False, contour_level = None,
                       fontsize = 18, font_scale = 6, axis_scale = 6,
                       save_img = False, img_path='./', img_name = 'image', img_format = 'pdf'):
@@ -169,7 +173,7 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
 
         fig = plt.figure(figsize=(25, 15))
         plt.subplot(projection=w)
-        cax=plt.imshow(channel_maps[0][0].data, origin='lower',cmap=color_map, vmax=vmax, vmin=vmin)
+        cax=plt.imshow(channel_maps[0][0].data, origin='lower',cmap=color_map, vmax=vmax, vmin=vmin, interpolation = interpolation)
         cbar=plt.colorbar(cax)
         if do_contour:
             plt.contour(channel_maps[0][0].data, contour_level)
@@ -207,7 +211,8 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                     lat.set_ticklabel_visible(True)
                     lat.set_ticklabel(size=axis_scale*max(columns,rows))
                 im = a.imshow(channel_maps[column][0].data, cmap=color_map,\
-                              vmax=vmax, vmin=vmin, origin='lower')
+                              vmax=vmax, vmin=vmin, origin='lower',
+                              interpolation = interpolation)
                 if do_contour:
                     a.contour(channel_maps[column][0].data, levels )
                 if column == 0:
@@ -245,7 +250,8 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                     lon.set_ticklabel_visible(True)
                     lon.set_ticklabel(size=axis_scale*max(columns,rows))
                 im = a.imshow(channel_maps[row][0].data, cmap=color_map,\
-                              vmax=vmax, vmin=vmin, origin='lower')
+                              vmax=vmax, vmin=vmin, origin='lower',
+                              interpolation = interpolation)
                 if do_contour:
                     a.contour(channel_maps[row][0].data, levels)
                 if row == rows-1:
@@ -293,7 +299,7 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
                     lat.set_axislabel(' ')
 
                 im = a.imshow(channel_maps[la][0].data, cmap=color_map,\
-                              vmax=vmax, vmin=vmin, origin='lower')
+                              vmax=vmax, vmin=vmin, origin='lower', interpolation = interpolation)
 
 
 
@@ -312,3 +318,51 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
 
             matplotlib.pyplot.savefig(img_path+img_name+'.'+img_format,\
                                       transparent = True, bbox_inches = 'tight', pad_inches = 0)
+
+
+def plot_cluster_spectra(cube,
+                         mode_signal_mean,
+                         mode_signal_std,
+                         save_image = False,
+                         image_path = None,
+                         image_name = None):
+
+    axis = 3
+
+    vel = astrokit.get_axis(axis, cube)/1e3
+
+    for i in range(len(mode_signal_mean)):
+
+        fig= plt.figure(figsize=(14,7))
+
+        fontsize = 18
+
+        plt.plot(vel,
+                 mode_signal_mean[i],
+                 linewidth = 5,
+                 label = 'Averaged Spectrum')
+
+        plt.plot(vel,
+                 mode_signal_mean[i]+mode_signal_std[i],
+                 color = 'C1',
+                 linestyle='dashed',
+                 linewidth = 3,
+                 label = 'Standard Deviation')
+
+        plt.plot(vel,
+                 mode_signal_mean[i]-mode_signal_std[i],
+                 color = 'C1',
+                 linestyle='dashed',
+                 linewidth = 3)
+
+        plt.legend(prop={'size': fontsize}, frameon=False, loc='upper left')
+        plt.title('Cluster - ' + str(i), size=fontsize)
+        plt.xlabel('Velocity [km/s]', size=fontsize)
+        plt.ylabel('Temperature [K]', size=fontsize)
+
+        if save_image:
+
+            matplotlib.pyplot.savefig(image_path + image_name,
+                                      transparent = False,
+                                      bbox_inches = 'tight',
+                                      pad_inches = 0)
