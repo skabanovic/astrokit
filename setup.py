@@ -18,7 +18,9 @@ setup(
                       'astrodendro',
                       'matplotlib',
                       'pandas',
-                      'scikit-learn'],
+                      'scikit-learn',
+                      'pomegranate',
+                      'cygrid'],
     # scripts=[
     #          'astro/celestial.py',
     #          'math/curve.py',
