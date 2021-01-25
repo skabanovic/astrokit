@@ -11,6 +11,7 @@ from sympy import Symbol, exp
 import numpy as np
 import astropy.units as u
 from astropy import constants as const
+import copy
 
 import astrokit
 from astrokit.num import solver
@@ -97,128 +98,134 @@ def optical_depth_ratio(iso_ratio,
     return optical_depth, error_tau
 
 
-def tau_spect(spect,
-              vel,
+def tau_spect(spect_main,
+              spect_iso,
+              vel_main,
+              vel_iso = [],
+              rms_main = 0,
+              rms_iso = 0,
+              shift_iso = 0.,
+              ratio_iso = 67.,
+              ratio_err = 0.,
+              norm_iso = 1.,
               vel_min = None,
               vel_max = None,
-              iso_shift = 0.,
-              iso_ratio = 67.,
-              iso_norm = 1.,
-              spect_rms = 0.,
-              error_ratio = 0.,
-              spect_iso = [],
-              vel_iso = [],
-              iso_rms = None,
-              use_axis = 'none',
+              vel_interp = None,
+              use_axis = 'main',
               tau_max = 30):
 
 
-    if  len(spect_iso) == 0:
-        spect_iso = spect
-
     if len(vel_iso) == 0:
-        vel_iso = vel
 
-    if not iso_rms:
-        iso_rms = spect_rms
+        vel_iso[:] = copy.deepcopy(vel_main[:]) - shift_iso
 
+    if use_axis == 'main':
 
-    if vel_min and vel_max:
+        if vel_min and vel_max:
 
-        idx_min = astrokit.get_idx(vel_min, vel, method = 'closer')
-        idx_max = astrokit.get_idx(vel_max, vel, method = 'closer')
+            idx_min = astrokit.get_idx(vel_min, vel_main, method = 'closer')
+            idx_max = astrokit.get_idx(vel_max, vel_main, method = 'closer')
 
-        vel_shift = np.zeros_like(vel[idx_min:idx_max])
+            vel = vel_main[idx_min : idx_max]
 
-        tau = np.zeros_like(vel[idx_min:idx_max])
-        error_tau = np.zeros_like(vel[idx_min:idx_max])
+            temp_main = spect_main[idx_min : idx_max]
 
-        vel_shift = vel[idx_min:idx_max] + iso_shift
+            temp_iso = np.interp(vel,
+                                 vel_iso,
+                                 spect_iso,
+                                 left = 0.0,
+                                 right = 0.0)
+        else:
 
-    elif use_axis == 'main':
+            vel = vel_main
 
-        idx_min = 0
-
-        vel_shift = np.zeros_like(vel)
-
-        tau = np.zeros_like(vel)
-        error_tau = np.zeros_like(vel)
-
-        vel_shift = vel + iso_shift
+            temp_main = spect_main
+            temp_iso = np.interp(vel,
+                                 vel_iso,
+                                 spect_iso,
+                                 left = 0.0,
+                                 right = 0.0)
 
     elif use_axis == 'iso':
 
-        vel_shift = np.zeros_like(vel_iso)
+        if vel_min and vel_max:
 
-        tau = np.zeros_like(vel_iso)
-        error_tau = np.zeros_like(vel_iso)
+            idx_min = astrokit.get_idx(vel_min, vel_iso, method = 'closer')
+            idx_max = astrokit.get_idx(vel_max, vel_iso, method = 'closer')
 
-        vel_shift = vel_iso + iso_shift
+            vel = vel_iso[idx_min : idx_max]
 
-    for vel_idx in range(len(vel_shift)):
+            temp_iso = spect_iso[idx_min : idx_max]
 
-        if use_axis == 'iso':
-
-            Tmb = astrokit.get_value(vel_shift[vel_idx], vel, spect)
-
+            temp_main = np.interp(vel,
+                                  vel_main,
+                                  spect_main,
+                                  left = 0.0,
+                                  right = 0.0)
         else:
 
-            Tmb = astrokit.get_value(vel_shift[vel_idx], vel_iso, spect_iso)
+            vel = vel_iso
 
-        if (Tmb < spect_rms):
+            temp_iso = spect_iso
 
-            if use_axis == 'iso':
+            temp_main = np.interp(vel,
+                                  vel_main,
+                                  spect_main,
+                                  left = 0.0,
+                                  right = 0.0)
 
-                tau[vel_idx], error_tau[vel_idx] = \
-                astrokit.optical_depth_ratio(iso_ratio, iso_norm,
-                                             Tmb, spect_rms,
-                                             error_ratio = error_ratio,
-                                             error_main= spect_rms,
-                                             error_iso = iso_rms,
-                                             method = "bisection",
-                                             tau_max = tau_max)
+    elif use_axis == 'interp':
 
+        vel = vel_inpter
 
+        temp_main = np.interp(vel,
+                              vel_main,
+                              spect_main,
+                              left = 0.0,
+                              right = 0.0)
 
-            else:
-
-                tau[vel_idx], error_tau[vel_idx] = \
-                astrokit.optical_depth_ratio(iso_ratio, iso_norm,
-                                             spect[idx_min+vel_idx], spect_rms,
-                                             error_ratio = error_ratio,
-                                             error_main= spect_rms,
-                                             error_iso = iso_rms,
-                                             method = "bisection",
-                                             tau_max = tau_max)
-
-        else:
-
-            if use_axis == 'iso':
-
-                tau[vel_idx], error_tau[vel_idx] = \
-                astrokit.optical_depth_ratio(iso_ratio, iso_norm,
-                                             Tmb, spect_iso[vel_idx],
-                                             error_ratio = error_ratio,
-                                             error_main= spect_rms,
-                                             error_iso = iso_rms,
-                                             method = "bisection",
-                                             tau_max = tau_max)
-
-            else:
+        temp_iso = np.interp(vel,
+                             vel_iso,
+                             spect_iso,
+                             left = 0.0,
+                             right = 0.0)
 
 
-                tau[vel_idx], error_tau[vel_idx] = \
-                astrokit.optical_depth_ratio(iso_ratio, iso_norm,
-                                             spect[idx_min+vel_idx], Tmb,
-                                             error_ratio = error_ratio,
-                                             error_main= spect_rms,
-                                             error_iso = iso_rms,
-                                             method = "bisection",
-                                             tau_max = tau_max)
+    tau = np.zeros_like(vel)
 
+    tau_err = np.zeros_like(vel)
 
-    return tau, error_tau
+    for channel in range(len(vel)):
 
+        tau[channel], tau_err[channel] = \
+            optical_depth_ratio(ratio_iso,
+                                norm_iso,
+                                temp_main[channel],
+                                temp_iso[channel],
+                                error_ratio = ratio_err,
+                                error_main = rms_main,
+                                error_iso = rms_iso,
+                                method = "bisection",
+                                tau_max = tau_max)
+
+    return tau, tau_err
+
+def tau_correction(value,
+                   tau,
+                   value_err = 0 ,
+                   tau_err = 0 ):
+
+    correction = (tau/(1-np.exp(-tau)))
+
+    value_corr = value * correction
+
+    err_1 = (correction*value_err)**2
+
+    err_2 =(value * tau_err * ((1.-np.exp(-tau)*(1.+tau))/(1.-np.exp(tau))**2 ))**2
+
+    value_corr_err = np.sqrt(err_1  +  err_2)
+
+    return value_corr, value_corr_err
 
 def hyperfine_avarage(spect, vel,
                       vel_range, vel_shift, weight):
@@ -248,7 +255,12 @@ def hyperfine_avarage(spect, vel,
     return Tmb_hyper, vel_hyper
 
 
-def inten_to_colden(inten, Tex=None, inten_err = 0, line = 'cii'):
+def inten_to_colden(inten,
+                    Tex=None,
+                    inten_err = 0,
+                    line = 'cii'):
+
+    molecular_line = False
 
     if line == 'cii':
 
@@ -270,15 +282,137 @@ def inten_to_colden(inten, Tex=None, inten_err = 0, line = 'cii'):
 
             const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
 
-    if line == 'co(3-2)':
+    if line == '13co(3-2)':
 
-        const_term = 1.58e13*(Tex+0.88)*np.exp(31.7/Tex)
+        J_up = 3
+
+        dipole_const = 0.11046e-18
+
+        freq_0 = 330.587e9
+
+        rot_const = 55.101012e9
+
+        molecular_line = True
+
+
+    elif line == '12co(3-2)':
+
+        J_up = 3
+
+        dipole_const = 0.11011e-18
+
+        freq_0 = 345.795e9
+
+        rot_const = 57.635968e9
+
+        molecular_line = True
+
+
+    elif line == 'c18o(3-2)':
+
+        J_up = 3
+
+        dipole_const = 0.11049e-18
+
+        freq_0 = 329.330e9
+
+        rot_const = 54.891421e9
+
+        molecular_line = True
+
+
+    if molecular_line:
+
+        #rot_const = freq_0/(2.*J_up)
+
+        const_unit = 1e6
+
+        T_0 = (const.h.cgs.value * freq_0)/const.k_B.cgs.value
+
+        E_up = const.h.cgs.value*rot_const*J_up*(J_up+1.)
+
+        const_term =\
+            (3.*const.h.cgs.value*const_unit)/(8.*np.pi**3*dipole_const**2*J_up)\
+            *( (const.k_B.cgs.value * Tex)/(const.h.cgs.value*rot_const)+1./3.)\
+            * np.exp(E_up/(const.k_B.cgs.value*Tex))\
+            /((np.exp(T_0/Tex)-1.)*(astrokit.brightness_temperatur(Tex, line = line) - astrokit.brightness_temperatur(2.7, line = line)) )
 
     colden = const_term*inten
 
     colden_err = const_term*inten_err
 
     return colden, colden_err
+
+def colden_map(inten,
+               inten_err = None,
+               temp_ex = None,
+               line = 'cii'):
+
+
+    colden     = astrokit.zeros_map(inten)
+    colden_err = astrokit.zeros_map(inten)
+
+    if inten_err:
+
+        colden[0].data, colden_err[0].data = inten_to_colden(inten[0].data,
+                                                             Tex=temp_ex,
+                                                             inten_err = inten_err[0].data,
+                                                             line = line)
+    else:
+
+        colden[0].data, colden_err[0].data = inten_to_colden(inten[0].data,
+                                                             Tex=temp_ex,
+                                                             line = line)
+
+
+###############################################################################
+#    if line == 'cii':
+#
+#        # cii rest frequency in [Hz]
+#        freq_cii = 1900.5369e9
+#
+#        # Einstein's coefficient [1/s]
+#        einstein_coef = 2.29e-6
+#
+#       # equivalent temperature of the excited level
+#        temp_0 = (const.h.value*freq_cii)/const.k_B.value
+#
+#        if temp_ex:
+#
+#            const_term = (1+(2./4.)*np.exp(temp_0/temp_ex))* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
+#
+#            colden[0].data = const_term*inten[0].data
+#
+#
+#        else:
+#
+#            const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
+#
+#            colden[0].data = const_term*inten[0].data
+#
+#        if inten_err:
+#
+#            colden_err[0].data = const_term*inten_err[0].data
+#
+#        else:
+#            colden_err[0].data = np.nan
+#
+#    elif line == 'co(3-2)':
+#
+#        colden[0].data = 1.58e13*(temp_ex+0.88)*np.exp(31.7/temp_ex)*inten[0].data
+#
+#        if inten_err:
+#
+#            colden_err[0].data = 1.58e13*(temp_ex+0.88)*np.exp(31.7/temp_ex)*inten_err[0].data
+#
+#        else:
+#
+#            colden_err[0].data = np.nan
+#
+###############################################################################
+
+    return colden, colden_err
+
 
 def colden_to_mass(colden,
                    area,
@@ -317,7 +451,7 @@ def colden_to_mass(colden,
 
     return mass, mass_err
 
-def inten_to_flux(inten, line, inten_err=0):
+def inten_to_flux(inten, line, inten_err=0.):
 
     if line == 'cii':
         # cii rest frequency in [Hz]
@@ -343,6 +477,7 @@ def inten_to_flux(inten, line, inten_err=0):
     const_flux = 2.*const.k_B.value*(freq**3/const.c.value**3)
 
     flux = inten*const_flux
+
     flux_err = inten_err*const_flux
 
     return flux, flux_err
@@ -380,62 +515,6 @@ def line_luminosity(inten,
                                        +(flux*area_err.value)**2)
 
         return lum, lum_err
-
-
-def colden_map(inten,
-               inten_err = None,
-               temp_ex = None,
-               line = 'cii'):
-
-
-    colden     = astrokit.zeros_map(inten)
-    colden_err = astrokit.zeros_map(inten)
-
-    if line == 'cii':
-
-        # cii rest frequency in [Hz]
-        freq_cii = 1900.5369e9
-
-        # Einstein's coefficient [1/s]
-        einstein_coef = 2.29e-6
-
-       # equivalent temperature of the excited level
-        temp_0 = (const.h.value*freq_cii)/const.k_B.value
-
-        if temp_ex:
-
-            const_term = (1+(2./4.)*np.exp(temp_0/temp_ex))* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
-
-            colden[0].data = const_term*inten[0].data
-
-
-        else:
-
-            const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(temp_0*const.c.value**3*einstein_coef)
-
-            colden[0].data = const_term*inten[0].data
-
-        if inten_err:
-
-            colden_err[0].data = const_term*inten_err[0].data
-
-        else:
-            colden_err[0].data = np.nan
-
-    elif line == 'co(3-2)':
-
-        colden[0].data = 1.58e13*(temp_ex+0.88)*np.exp(31.7/temp_ex)*inten[0].data
-
-        if inten_err:
-
-            colden_err[0].data = 1.58e13*(temp_ex+0.88)*np.exp(31.7/temp_ex)*inten_err[0].data
-
-        else:
-
-            colden_err[0].data = np.nan
-
-    return colden, colden_err
-
 
 def mass_map(colden,
              colden_err = None,
@@ -515,14 +594,13 @@ def mass_map(colden,
 
 
 
-            mass[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] = (pixel_size*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]*element_mass)/abundance_ratio
+            mass[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] =\
+                (pixel_size*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]*element_mass)/abundance_ratio
 
-            mass_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] = element_mass/abundance_ratio\
-                                                                           * np.sqrt(  pixel_size_err**2*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]**2
-                                                                           + pixel_size**2*colden_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]**2)
-
-
-
+            mass_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]] =\
+                element_mass/abundance_ratio\
+                * np.sqrt( pixel_size_err**2*colden[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]**2
+                + pixel_size**2*colden_err[0].data[idx_sig3[0][idx_mask], idx_sig3[1][idx_mask]]**2)
 
     else:
 

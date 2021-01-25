@@ -19,6 +19,7 @@ import math
 import numpy as np
 import numpy.ma as ma
 import astropy.units as u
+import astrokit
 
 from astropy.io import fits
 from astropy.coordinates import Angle
@@ -111,7 +112,7 @@ def get_grid(hdul):
 
     elif dim == 3:
 
-        hdul_inp = zeros_map(hdul)
+        hdul_inp = astrokit.zeros_map(hdul)
 
     w = WCS(hdul_inp[0].header)
 
@@ -120,9 +121,36 @@ def get_grid(hdul):
 
     idx_grid_ra, idx_grid_dec = np.meshgrid(pix_ra, pix_dec, sparse=False, indexing='xy')
 
-    grid_ra, grid_dec = w.all_pix2world(idx_grid_ra, idx_grid_dec, 0)
+    grid_ra, grid_dec = w.all_pix2world(idx_grid_ra, idx_grid_dec, 1)
 
     return grid_ra, grid_dec
+
+
+
+def get_solid_angle(hdu, output = 'rad'):
+
+    wcs = WCS(hdu[0].header)
+    nx = hdu[0].header['NAXIS1']
+    ny = hdu[0].header['NAXIS2']
+    xx = np.arange(-0.5, nx, 1)
+    xy = np.arange(0, ny, 1)
+    yx = np.arange(0, nx, 1)
+    yy = np.arange(-0.5, ny, 1)
+    xX, xY = np.meshgrid(xx, xy)
+    yX, yY = np.meshgrid(yx, yy)
+    xXw, xYw = wcs.all_pix2world(xX, xY, 0)
+    yXw, yYw = wcs.all_pix2world(yX, yY, 0)
+    dXw = xXw[:,1:] - xXw[:,:-1]
+    dYw = yYw[1:] - yYw[:-1]
+    if output == 'rad':
+
+        A = abs(Angle(dXw*u.deg).rad * Angle(dYw*u.deg).rad)
+
+    else:
+
+        A = abs(dXw*dYw)
+
+    return A
 
 #############################################################
 #
@@ -329,82 +357,67 @@ def channel_map(hdul, ch_min, ch_max, ch_res = 1, unit = 'channel'):
 #
 #############################################################
 
-def moment_N(order, hdul, noise_level = 1.0e-6):
+def moment_N(order, hdul, noise_level = 0):
 
-    # make an empty moment 0 map
-    map_size = np.zeros_like(hdul[0].data[0,:,:])
-    hdu = fits.PrimaryHDU(map_size)
-    moment_0 = fits.HDUList([hdu])
-    moment_0[0].header = copy.deepcopy(hdul[0].header)
-
-    # remove 3d attributes from header
-    for attribute in list(moment_0[0].header.keys()):
-        if not (attribute == ''):
-            if (attribute[-1] == '3'):
-                del moment_0[0].header[attribute]
-            elif (attribute == 'WCSAXES'):
-                moment_0[0].header['WCSAXES'] = 2
-
-    moment_0[0].header['NAXIS']=2
-
-    # make an empty moment 1 map
-    moment_1 = copy.deepcopy(moment_0)
-
-    # make an empty moment N map
-    moment_N = copy.deepcopy(moment_0)
+    moment_0 = astrokit.zeros_map(hdul)
 
     # determine velocity axis
     grid_axis=3
     vel = get_axis(grid_axis, hdul)/1e3
 
+    if order > 0:
+
+        moment_1 = astrokit.zeros_map(hdul)
+        moment_N = astrokit.zeros_map(hdul)
+
     # determine moment 0 and 1
     for idx_dec in range(len(moment_0[0].data[:,0])):
         for idx_ra in range(len(moment_0[0].data[0,:])):
 
-            moment_0[0].data[idx_dec,idx_ra]=\
-            np.trapz(hdul[0].data[:,idx_dec,idx_ra],vel[:])
+            moment_0[0].data[idx_dec, idx_ra]=\
+            np.trapz(hdul[0].data[:, idx_dec, idx_ra], vel[:])
 
             moment_min = noise_level
 
             if (order>0):
-                if not np.isnan(moment_0[0].data[idx_dec,idx_ra])\
-                and (abs(moment_0[0].data[idx_dec,idx_ra])>moment_min):
 
-                    if (order==1):
-                        # determine weighted velocity
-                        vel_wei=(hdul[0].data[:,idx_dec,idx_ra]*vel[:])\
-                                 /moment_0[0].data[idx_dec,idx_ra]
+                #if not np.isnan(moment_0[0].data[idx_dec,idx_ra])\
+                #and (abs(moment_0[0].data[idx_dec,idx_ra])>moment_min):
 
-                        # determine moment 1
-                        moment_1[0].data[idx_dec,idx_ra]=np.trapz(vel_wei, vel)
+                # determine weighted velocity
+                moment_wei = hdul[0].data[:,idx_dec, idx_ra]*vel[:]
 
-                    else:
-                        # determine moment N weight
-                        moment_wei =(hdul[0].data[:,idx_dec,idx_ra]*\
-                                     (vel[:]-moment_1[0].data[idx_dec,idx_ra])**(order))\
-                                     /moment_0[0].data[idx_dec,idx_ra]
+                # determine moment 1
+                moment_1[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, vel)\
+                                                 / moment_0[0].data[idx_dec, idx_ra]
 
-                        # determine moment N
-                        moment_N[0].data[idx_dec,idx_ra]=np.trapz(moment_wei, vel)
+                if order > 1:
+                    # determine moment N weight
+                    moment_wei =  hdul[0].data[:, idx_dec, idx_ra] \
+                               * (vel[:] - moment_1[0].data[idx_dec, idx_ra])**order
 
-                else:
-                    if (order==1):
-                        moment_1[0].data[idx_dec,idx_ra]=0.0
 
-                    else:
-                        moment_N[0].data[idx_dec,idx_ra]=0.0
+                    # determine moment N
+                    moment_N[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, vel)\
+                                                     / moment_0[0].data[idx_dec, idx_ra]
+
+                #else:
+                #
+                #        moment_1[0].data[idx_dec, idx_ra] = np.nan
+                #        moment_N[0].data[idx_dec, idx_ra] = np.nan
 
     # determine moment N
-    if (order == 0):
+    if order == 0:
 
-        moment_N = copy.deepcopy(moment_0)
+        return moment_0
 
-    elif (order == 1):
+    elif order == 1:
 
-        moment_N = copy.deepcopy(moment_1)
+        return moment_1
 
+    else:
 
-    return(moment_N)
+        return moment_N
 
 #############################################################
 #
@@ -465,16 +478,16 @@ def chop_cube(vel_min, vel_max, hdul_inp):
     hdul_chop = fits.HDUList([hdu_chop])
     hdul_chop[0].header=copy.deepcopy(hdul_inp[0].header)
 
-    axis_len  = len(vel[idx_min : idx_max])
+    axis_len  = len(vel[idx_min : idx_max+1])
 
     ref_pos   = hdul_inp[0].header["CRPIX3"]
     step_size = hdul_inp[0].header["CDELT3"]
-    ref_value = vel_min * 1e3 - (1. - ref_pos) * step_size
+    ref_value = vel[idx_min] * 1e3 - (1. - ref_pos) * step_size
 
     hdul_chop[0].header["NAXIS3"] = axis_len
     hdul_chop[0].header["CRVAL3"] = ref_value
 
-    hdul_chop[0].data=hdul_inp[0].data[idx_min:idx_max,:,:]
+    hdul_chop[0].data=hdul_inp[0].data[idx_min:idx_max+1,:,:]
 
     return hdul_chop
 
@@ -518,14 +531,14 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
         spect_noise[spect_mask.mask]=0.0
 
         # determine the rms of the noise
-        rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)-1))
+        rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)))
 
     elif range:
 
         idx_min = get_idx(rms_range[0], vel, 'closer')
         idx_max = get_idx(rms_range[1], vel, 'closer')
 
-        rms_noise = np.sqrt(sum(spect[idx_min:idx_max]**2)/(len(spect[idx_min:idx_max])-1.))
+        rms_noise = np.sqrt(sum(spect[idx_min:idx_max]**2)/(len(spect[idx_min:idx_max])))
 
     return rms_noise
 
@@ -565,7 +578,7 @@ def rms_map(hdul, window=None, rms_range=None):
 
 def rms2weight(rms_map, min_lim = 1e-9):
 
-    weight_map = zeros_map(rms_map)
+    weight_map = astrokit.zeros_map(rms_map)
 
     weight_map[0].data = 1./rms_map[0].data**2
 
@@ -575,7 +588,7 @@ def rms2weight(rms_map, min_lim = 1e-9):
 
 def gauss_weight(pos_ra, pos_dec, width, sky_map):
 
-    weight = zeros_map(sky_map)
+    weight = astrokit.zeros_map(sky_map)
 
     grid2d_ra, grid2d_dec = get_grid(sky_map)
 
@@ -604,53 +617,65 @@ def rm_borders(hdul, wei_map, wei_min):
         hdul_new[0].data[idx_dec, wei_map[0].data<wei_min] = np.nan
     return hdul_new
 
-def noise_intensity(vel_min, vel_max,  vel, spect):
+def noise_intensity(rms = None,
+                    vel_res = None,
+                    vel_min = 0,
+                    vel_max = 0,
+                    vel = None,
+                    spect = None,
+                    variable_rms = False):
 
-    idx_min = get_idx(vel_min, vel)
 
-    idx_max = get_idx(vel_max, vel)
+    if not vel_res:
+        vel_res = abs(vel[1]-vel[0])
 
-    spect_noise = spect[idx_min:idx_max]
+    ch_num = (vel_max - vel_min)/vel_res + 1.
 
-    ch_num = idx_max - idx_min +1
+    if variable_rms:
 
-    vel_res = abs(vel[1]-vel[0])
+        intensity = vel_res*np.sqrt(np.sum(rms**2))
 
-    # determine the rms of the noise
-    rms = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-1))
+    else:
 
-    intensity = rms * np.sqrt(ch_num) * vel_res
+        if rms == None:
+
+            rms = rms_spectrum(vel,
+                               spect,
+                               window = None,
+                               rms_range = [vel_min, vel_max])
+
+
+        intensity = rms * np.sqrt(ch_num) * vel_res
+
+
 
     return intensity
 
 def noise_intensity_map(vel_min, vel_max, hdul):
 
-    # make an empty map
-    map_size = np.zeros_like(hdul[0].data[0,:,:])
-    hdu = fits.PrimaryHDU(map_size)
-    noise_map = fits.HDUList([hdu])
-    noise_map[0].header = copy.deepcopy(hdul[0].header)
-
-    # remove 3d attributes from header
-    for attribute in list(noise_map[0].header.keys()):
-        if not (attribute == ''):
-            if (attribute[-1] == '3'):
-                del noise_map[0].header[attribute]
-
-    noise_map[0].header['NAXIS']=2
+    noise_map = astrokit.zeros_map(hdul)
 
     axis=3
     vel = get_axis(axis, hdul)/1e3
+
+    vel_res = abs(vel[1]-vel[0])
 
     len_ax1 = len(noise_map[0].data[:,0])
     len_ax2 = len(noise_map[0].data[0,:])
 
     for idx1 in range(len_ax1):
         for idx2 in range(len_ax2):
-            noise_map[0].data[idx1, idx2] = noise_intensity(vel_min,
-                                                            vel_max,
-                                                            vel,
-                                                            hdul[0].data[:, idx1, idx2])
+
+
+            rms = rms_spectrum(vel,
+                               hdul[0].data[:, idx1, idx2],
+                               window = None,
+                               rms_range = [vel_min, vel_max])
+
+            noise_map[0].data[idx1, idx2] = noise_intensity(rms,
+                                                            vel_res,
+                                                            vel_min = vel_min,
+                                                            vel_max = vel_max)
 
     return noise_map
 
@@ -785,28 +810,16 @@ def average_volume(hdul_inp,
 
         if weight:
 
-            count = 0
+            spect_aver[0].data = np.average(hdul_inp[0].data[:,idx_sig3[0, :], idx_sig3[1, :]],
+                                            weights = weight[0].data[idx_sig3[0, :], idx_sig3[1, :]],
+                                            axis = 1)
 
-            for idx_beam in range(len(idx_sig3[0,:])):
 
-                spect_aver[0].data[:]+=hdul_inp[0].data[:,idx_sig3[0,idx_beam], idx_sig3[1,idx_beam]]
-
-                count+=1
-
-            spect_aver[0].data = spect_aver[0].data/count
 
         else:
 
-            weight_sum=0.
-
-            for idx_beam in range(len(idx_sig3[0,:])):
-
-                spect_aver[0].data+=hdul_inp[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]\
-                * weight[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]
-
-                weight_sum+=weight[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]
-
-            spect_aver[0].data = spect_aver[0].data/weight_sum
+            spect_aver[0].data = np.average(hdul_inp[0].data[:, idx_sig3[0, :], idx_sig3[1, :]],
+                                            axis = 1)
 
     else:
         print("error: no valid shape entered")
@@ -947,52 +960,7 @@ def find_wing(vel, spect, idx_peak, rms = 0, wing_hight_rel = 5, wing_hight_rms 
 
         print("error: chose red or blue wing")
 
-def zeros_map(hdul):
 
-    dim = hdul[0].header['NAXIS']
-
-    if dim == 3:
-        # make an empty 2d grid with the same spatial
-        # size as the input cube
-        map_size = np.zeros_like(hdul[0].data[0,:,:])
-        hdu = fits.PrimaryHDU(map_size)
-        empty_map = fits.HDUList([hdu])
-
-        # the output hdulist (map_intg) is geting the header information
-        # of the input spectral cube ()hdul
-        empty_map[0].header = copy.deepcopy(hdul[0].header)
-
-        # remove 3D attributes from header
-        for attribute in list(empty_map[0].header.keys()):
-            if not (attribute == ''):
-                if (attribute[-1] == '3'):
-                    del empty_map[0].header[attribute]
-
-        empty_map[0].header['NAXIS']=2
-
-    elif dim == 2:
-
-        map_size = np.zeros_like(hdul[0].data)
-        hdu = fits.PrimaryHDU(map_size)
-        empty_map = fits.HDUList([hdu])
-
-        # the output hdulist (map_intg) is geting the header information
-        # of the input spectral cube ()hdul
-        empty_map[0].header = copy.deepcopy(hdul[0].header)
-
-    return empty_map
-
-def zeros_cube(hdul):
-
-    cube_size = np.zeros_like(hdul[0].data)
-    hdu = fits.PrimaryHDU(cube_size)
-    empty_cube = fits.HDUList([hdu])
-
-    # the output hdulist (map_intg) is geting the header information
-    # of the input spectral cube ()hdul
-    empty_cube[0].header = copy.deepcopy(hdul[0].header)
-
-    return empty_cube
 
 def pi_diagram(path, hdul, radius = None):
 
@@ -1005,7 +973,6 @@ def pi_diagram(path, hdul, radius = None):
     else:
 
         radius = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)*u.deg)
-
 
 
     grid2d_ax1, grid2d_ax2 = get_grid(hdul)
