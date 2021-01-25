@@ -63,7 +63,7 @@ def gauss_asymmetric(ax, amp, ax_0, width, width_asym):
 
     return asymmetric_profile
 
-def gauss_2d(width, ax1_0, ax2_0, ax1, ax2 , mode = 'FWHM', do_norm = True, amp = None):
+def gauss_2d(width, ax1_0, ax2_0, ax1, ax2 , mode = 'FWHM', do_norm = True, amp = 1.):
 
     if mode == 'FWHM':
 
@@ -71,13 +71,13 @@ def gauss_2d(width, ax1_0, ax2_0, ax1, ax2 , mode = 'FWHM', do_norm = True, amp 
 
     if do_norm:
 
-        norm = (1./(2.*np.pi*width**2))
+        norm = 1./2./np.pi/width**2
 
-        gauss = norm*np.exp(-(ax1-ax1_0)**2/(2.*width**2) - (ax2-ax2_0)**2/(2.*width**2))
+        gauss = norm*np.exp(-(ax1-ax1_0)**2/2./width**2 - (ax2-ax2_0)**2/2./width**2)
 
     else:
 
-        gauss = amp*np.exp(-(ax1-ax1_0)**2/(2.*width**2) - (ax2-ax2_0)**2/(2.*width**2))
+        gauss = amp*np.exp(-(ax1-ax1_0)**2/2./width**2 - (ax2-ax2_0)**2/2./width**2)
 
     return gauss
 
