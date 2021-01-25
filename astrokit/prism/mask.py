@@ -16,11 +16,156 @@ import astrokit
 
 import numpy as np
 import astropy.units as u
+from astropy.coordinates import SkyCoord
 
 from scipy import signal
 from astropy.io import fits
 from astropy.coordinates import Angle
 
+import cygrid
+
+
+def regrid_map(input_map,
+               target_map,
+               input_beam = None,
+               target_beam = None,
+               input_frame = 'icrs',
+               target_frame = 'icrs'):
+
+    if input_beam:
+
+        input_beam = input_beam/3600.
+
+    else:
+
+        input_beam = (input_map[0].header['BMAJ'] + input_map[0].header['BMIN'])/2.
+
+    if target_beam:
+
+        target_beam = target_beam/3600.
+
+    else:
+
+        target_beam = (target_map[0].header['BMAJ'] + target_map[0].header['BMIN'])/2.
+
+    gridder = cygrid.WcsGrid(target_map[0].header)
+
+    if input_frame != target_frame:
+
+        grid_ax1, grid_ax2 = astrokit.get_grid(input_map)
+
+        coords = SkyCoord(grid_ax1, grid_ax2, frame = input_frame, unit='deg')
+
+        if target_frame == 'icrs':
+
+            input_lon_grid = coords.icrs.ra.deg
+            input_lat_grid = coords.icrs.dec.deg
+
+        elif target_frame == 'galactic':
+
+            input_lon_grid = coords.galactic.l.deg
+            input_lat_grid = coords.galactic.b.deg
+
+    else:
+
+        input_lon_grid, input_lat_grid = astrokit.get_grid(input_map)
+
+    kernelsize_fwhm = np.sqrt(target_beam**2-input_beam**2)
+
+    # see https://en.wikipedia.org/wiki/Full_width_at_half_maximum
+    kernelsize_sigma = kernelsize_fwhm / np.sqrt(8 * np.log(2))
+    sphere_radius = 3. * kernelsize_sigma
+
+    gridder.set_kernel(
+        'gauss1d',
+        (kernelsize_sigma,),
+        sphere_radius,
+        kernelsize_sigma / 2.
+        )
+
+    gridder.grid(
+        input_lon_grid.flatten(),
+        input_lat_grid.flatten(),
+        input_map[0].data.flatten(),
+        )
+
+    output_data = gridder.get_datacube()
+
+    dim_ref = target_map[0].header['NAXIS']
+
+    # create an empty 2d hdulist
+    if (dim_ref == 2):
+        empty_map = np.zeros_like(target_map[0].data)
+    elif (dim_ref == 3):
+        empty_map = np.zeros_like(target_map[0].data[0,:,:])
+
+    hdu_mask = fits.PrimaryHDU(empty_map)
+    mask_map = fits.HDUList([hdu_mask])
+
+    mask_map[0].header = copy.deepcopy(input_map[0].header)
+
+    for attribute in list(target_map[0].header.keys()):
+        if not (attribute == ''):
+            if ((attribute[-1] == '1') or  (attribute[-1] == '2') ):
+                mask_map[0].header[attribute] = copy.deepcopy(target_map[0].header[attribute])
+
+    mask_map[0].header['BMAJ'] = target_beam
+    mask_map[0].header['BMIN'] = target_beam
+
+    mask_map[0].data = output_data
+
+    return mask_map
+
+def regrid_cube(input_cube,
+                target_cube,
+                input_beam = None,
+                target_beam = None,
+                input_frame = 'icrs',
+                target_frame = 'icrs'):
+
+    empty_cube=np.zeros([input_cube[0].header['NAXIS3'],
+                         target_cube[0].header['NAXIS2'],
+                         target_cube[0].header['NAXIS1']])
+
+    hdu_mask = fits.PrimaryHDU(empty_cube)
+    mask_cube = fits.HDUList([hdu_mask])
+
+    mask_cube[0].header = copy.deepcopy(input_cube[0].header)
+
+    for attribute in list(target_cube[0].header.keys()):
+        if not (attribute == ''):
+            if ((attribute[-1] == '1') or  (attribute[-1] == '2') ):
+                mask_cube[0].header[attribute] = copy.deepcopy(target_cube[0].header[attribute])
+
+    target_map = astrokit.zeros_map(target_cube)
+
+    target_map[0].data[:, :] = target_cube[0].data[0, :, :]
+
+    for vel in range(input_cube[0].header['NAXIS3']):
+
+        time_start = time.time()
+
+        input_map = astrokit.zeros_map(input_cube)
+
+        input_map[0].data[:, :] = input_cube[0].data[vel, :, :]
+
+        channel_map = regrid_map(input_map,
+                                 target_map,
+                                 input_beam = input_beam,
+                                 target_beam = target_beam,
+                                 input_frame = input_frame,
+                                 target_frame = target_frame)
+
+        mask_cube[0].data[vel, :, :] = channel_map[0].data[:, :]
+
+        time_end = time.time()
+
+        astrokit.loop_time(vel, input_cube[0].header['NAXIS3'], time_start, time_end)
+
+    mask_cube[0].header['BMAJ'] = channel_map[0].header['BMAJ']
+    mask_cube[0].header['BMIN'] = channel_map[0].header['BMAJ']
+
+    return mask_cube
 
 
 #############################################################
@@ -195,28 +340,32 @@ def convolve_map(new_beam, hdul_inp):
     hdul_outp[0].header['BMIN']=new_beam.deg
 
     # determine coordinats
-    grid_2d_ax1, grid_2d_ax2 = astrokit.get_grid(hdul_inp)
+    #grid_2d_ax1, grid_2d_ax2 = astrokit.get_grid(hdul_inp)
 
     res_ax1 = abs(hdul_inp[0].header["CDELT1"])
     res_ax2 = abs(hdul_inp[0].header["CDELT2"])
 
-    len_func_ax1=int(round(dif_beam.deg/res_ax1+0.49)*4+1)
-    len_func_ax2=int(round(dif_beam.deg/res_ax2+0.49)*4+1)
+    len_func_ax1=int(round(dif_beam.deg/res_ax1+0.49)*10+1)
+    len_func_ax2=int(round(dif_beam.deg/res_ax2+0.49)*10+1)
 
-    conv_func = np.zeros([len_func_ax1, len_func_ax2])
+    conv_func = np.zeros([len_func_ax1+1, len_func_ax2+1])
 
-    for i in range(len_func_ax1):
-        for j in range(len_func_ax2):
-            conv_func[i,j]=astrokit.gauss_2d(dif_beam.deg, 0.0, 0.0, res_ax1*(-int(len_func_ax1/2)+j),\
+    for i in range(len_func_ax1+1):
+        for j in range(len_func_ax2+1):
+            conv_func[i, j]=astrokit.gauss_2d(dif_beam.deg, 0.0, 0.0, res_ax1*(-int(len_func_ax1/2)+j),\
                                           res_ax2*(-int(len_func_ax2/2)+i))
 
-    conv_func=conv_func/sum(sum(conv_func))
+    conv_func = conv_func/np.sum(conv_func)
+    #conv_func = np.flip(conv_func)
+
+    print(conv_func.shape)
 
     input_dim = hdul_inp[0].header['NAXIS']
 
     if input_dim == 2:
 
-        hdul_outp[0].data = signal.convolve2d(hdul_inp[0].data, conv_func, boundary='symm',mode='same')
+        #hdul_outp[0].data = signal.convolve2d(hdul_inp[0].data, conv_func, boundary='symm', mode='same')
+        hdul_outp[0].data = signal.convolve2d(hdul_inp[0].data, conv_func, mode='same', boundary='fill', fillvalue=0)
 
         return hdul_outp
 
@@ -226,7 +375,8 @@ def convolve_map(new_beam, hdul_inp):
 
         for idx_ax3 in range(len_ax3):
             hdul_outp[0].data[idx_ax3,:,:] = \
-            signal.convolve2d(hdul_inp[0].data[idx_ax3,:,:], conv_func, boundary='symm',mode='same')
+            signal.convolve2d(hdul_inp[0].data[idx_ax3,:,:], conv_func, mode='same', boundary='fill', fillvalue=0)
+            #signal.convolve2d(hdul_inp[0].data[idx_ax3,:,:], conv_func, boundary='symm', mode='same')
 
         return hdul_outp
 
@@ -487,7 +637,10 @@ def empty_grid(grid_ax1 = None,
                ref_value_ax2 = None,
                ref_value_ax3 = None,
                beam_maj = None,
-               beam_min = None):
+               beam_min = None,
+               CTYPE1 = 'RA---GLS',
+               CTYPE2 = 'DEC--GLS',
+               CTYPE3 = 'VRAD'):
 
     len_ax1 = len(grid_ax1)
     len_ax2 = len(grid_ax2)
@@ -517,11 +670,13 @@ def empty_grid(grid_ax1 = None,
     # value of reference grid position of axis
     ref_value_ax2   = ref_value_ax2
 
+    output_hdul[0].header["CTYPE1"] = CTYPE1
     output_hdul[0].header["NAXIS1"] = len_ax1
     output_hdul[0].header["CDELT1"] = step_size_ax1
     output_hdul[0].header["CRVAL1"] = ref_value_ax1
     output_hdul[0].header["CRPIX1"] = 1. - (grid_ax1[0] - ref_value_ax1)/step_size_ax1
 
+    output_hdul[0].header["CTYPE2"] = CTYPE2
     output_hdul[0].header["NAXIS2"] = len_ax2
     output_hdul[0].header["CDELT2"] = step_size_ax2
     output_hdul[0].header["CRVAL2"] = ref_value_ax2
@@ -538,9 +693,129 @@ def empty_grid(grid_ax1 = None,
         # value of reference grid position of axis
         ref_value_ax3   = ref_value_ax3
 
+        output_hdul[0].header["CTYPE3"] = CTYPE3
         output_hdul[0].header["NAXIS3"] = len_ax3
         output_hdul[0].header["CDELT3"] = step_size_ax3
         output_hdul[0].header["CRVAL3"] = ref_value_ax3
         output_hdul[0].header["CRPIX3"] = 1. - (grid_ax3[0] - ref_value_ax3)/step_size_ax3
 
     return output_hdul
+
+def empty_spectrum(grid_ax1,
+                   unit = 'VRAD'):
+
+    len_ax1 = len(grid_ax1)
+
+    spectrum_size = np.zeros_like(grid_ax1)
+    hdu = fits.PrimaryHDU(spectrum_size)
+    output_hdul = fits.HDUList([hdu])
+
+    # step size of axis
+    step_size_ax1   = grid_ax1[1] - grid_ax1[0]
+
+    # value of reference grid position of axis
+    ref_value_ax1   = grid_ax1[0]
+
+    output_hdul[0].header["CTYPE1"] = unit
+    output_hdul[0].header["NAXIS1"] = len_ax1
+    output_hdul[0].header["CDELT1"] = step_size_ax1
+    output_hdul[0].header["CRVAL1"] = ref_value_ax1
+    output_hdul[0].header["CRPIX1"] = 1. - (grid_ax1[0] - ref_value_ax1)/step_size_ax1
+
+    return output_hdul
+
+def zeros_map(hdul):
+
+    dim = hdul[0].header['NAXIS']
+
+    if dim == 3:
+        # make an empty 2d grid with the same spatial
+        # size as the input cube
+        map_size = np.zeros_like(hdul[0].data[0,:,:])
+        hdu = fits.PrimaryHDU(map_size)
+        empty_map = fits.HDUList([hdu])
+
+        # the output hdulist (map_intg) is geting the header information
+        # of the input spectral cube ()hdul
+        empty_map[0].header = copy.deepcopy(hdul[0].header)
+
+        # remove 3D attributes from header
+        for attribute in list(empty_map[0].header.keys()):
+            if not (attribute == ''):
+                if (attribute[-1] == '3'):
+                    del empty_map[0].header[attribute]
+                elif (attribute == 'WCSAXES'):
+                    empty_map[0].header['WCSAXES'] = 2
+
+        empty_map[0].header['NAXIS']=2
+
+    elif dim == 2:
+
+        map_size = np.zeros_like(hdul[0].data)
+        hdu = fits.PrimaryHDU(map_size)
+        empty_map = fits.HDUList([hdu])
+
+        # the output hdulist (map_intg) is geting the header information
+        # of the input spectral cube ()hdul
+        empty_map[0].header = copy.deepcopy(hdul[0].header)
+
+    return empty_map
+
+def zeros_cube(hdul):
+
+    cube_size = np.zeros_like(hdul[0].data)
+    hdu = fits.PrimaryHDU(cube_size)
+    empty_cube = fits.HDUList([hdu])
+
+    # the output hdulist (map_intg) is geting the header information
+    # of the input spectral cube ()hdul
+    empty_cube[0].header = copy.deepcopy(hdul[0].header)
+
+    return empty_cube
+
+def merge_cubes(cube_1,
+                cube_2,
+                vel_range=None):
+
+
+    if vel_range:
+
+        cube_merge_1 = astrokit.chop_cube(vel_range[0], vel_range[1], cube_1)
+        cube_merge_2 = astrokit.chop_cube(vel_range[0], vel_range[1], cube_2)
+
+    else:
+
+        cube_merge_1 = cube_1
+        cube_merge_2 = cube_2
+
+
+
+    axis = 3
+
+    vel = astrokit.get_axis(axis, cube_merge_1)/1e3
+
+    vel_res = cube_merge_1[0].header['CDELT3']/1e3
+
+    vel_merge = np.arange(vel[0], vel[-1] + vel[-1]-vel[0] + 2.*vel_res, vel_res)
+
+    axis = 1
+    axis_ra = astrokit.get_axis(axis, cube_merge_1)
+
+    axis = 2
+    axis_dec = astrokit.get_axis(axis, cube_merge_1)
+
+    cube_merge = astrokit.empty_grid(grid_ax1 = axis_ra,
+                                     grid_ax2 = axis_dec,
+                                     grid_ax3 = vel_merge*1.0e3,
+                                     ref_value_ax1 = cube_merge_1[0].header['CRVAL1'],
+                                     ref_value_ax2 = cube_merge_1[0].header['CRVAL2'],
+                                     ref_value_ax3 = cube_merge_1[0].header['CRVAL3'],
+                                     beam_maj = cube_merge_1[0].header['BMAJ'],
+                                     beam_min = cube_merge_1[0].header['BMIN'])
+
+    cube_merge[0].data[: cube_merge_1[0].header['NAXIS3'], :, :] = cube_merge_1[0].data
+    cube_merge[0].data[cube_merge_1[0].header['NAXIS3'] :, :, :] = cube_merge_2[0].data
+
+    cube_merge[0].header['VSHIFT'] = (vel[-1]-vel[0]+vel_res)*1.0e3
+
+    return cube_merge
