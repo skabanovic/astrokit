@@ -24,6 +24,124 @@ from astropy.coordinates import Angle
 
 import cygrid
 
+def regrid_spectral_cube(input_cube,
+                         target_cube,
+                         input_beam = None,
+                         target_beam = None,
+                         input_frame = 'icrs',
+                         target_frame = 'icrs'):
+
+    if input_beam:
+
+        input_beam = input_beam/3600.
+
+    else:
+
+        input_beam = (input_cube[0].header['BMAJ'] + input_cube[0].header['BMIN'])/2.
+
+    if target_beam:
+
+        target_beam = target_beam/3600.
+
+    else:
+
+        target_beam = (target_cube[0].header['BMAJ'] + target_cube[0].header['BMIN'])/2.
+
+    gridder = cygrid.WcsGrid(target_cube[0].header)
+
+    if input_frame != target_frame:
+
+        grid_ax1, grid_ax2 = astrokit.get_grid(input_cube)
+
+        coords = SkyCoord(grid_ax1, grid_ax2, frame = input_frame, unit='deg')
+
+        if target_frame == 'icrs':
+
+            input_lon_grid = coords.icrs.ra.deg
+            input_lat_grid = coords.icrs.dec.deg
+
+        elif target_frame == 'galactic':
+
+            input_lon_grid = coords.galactic.l.deg
+            input_lat_grid = coords.galactic.b.deg
+
+    else:
+
+        input_lon_grid, input_lat_grid = astrokit.get_grid(input_cube)
+
+    kernelsize_fwhm = np.sqrt(target_beam**2-input_beam**2)
+
+    if (kernelsize_fwhm < 0.5*input_beam):
+
+        print('Warning: the target beam is to small, thus the gaussian kernal is undersampled')
+
+    # see https://en.wikipedia.org/wiki/Full_width_at_half_maximum
+    kernelsize_sigma = kernelsize_fwhm / np.sqrt(8 * np.log(2))
+    sphere_radius = 3. * kernelsize_sigma
+
+    gridder.set_kernel(
+        'gauss1d',
+        (kernelsize_sigma,),
+        sphere_radius,
+        kernelsize_sigma / 2.
+        )
+
+    input_dimension = input_cube[0].header['NAXIS']
+
+    input_ax1_len = input_cube[0].header['NAXIS1']
+    input_ax2_len = input_cube[0].header['NAXIS2']
+
+    target_ax1_len = target_cube[0].header['NAXIS1']
+    target_ax2_len = target_cube[0].header['NAXIS2']
+
+    # create an empty 2d hdulist
+    if (input_dimension == 2):
+
+        empty_cube=np.zeros([target_ax2_len,
+                             target_ax1_len])
+
+        gridder.grid(
+            input_lon_grid.flatten(),
+            input_lat_grid.flatten(),
+            input_cube[0].data.flatten(),
+            )
+
+    elif (input_dimension == 3):
+
+        input_ax3_len = input_cube[0].header['NAXIS3']
+
+        empty_cube=np.zeros([input_ax3_len,
+                             target_ax2_len,
+                             target_ax1_len])
+
+        gridder.grid(
+        input_lon_grid.flatten(),
+        input_lat_grid.flatten(),
+        input_cube[0].data.reshape(input_ax3_len, input_ax2_len*input_ax1_len).transpose(),
+        )
+
+
+    hdu_mask = fits.PrimaryHDU(empty_cube)
+    mask_cube = fits.HDUList([hdu_mask])
+
+    mask_cube[0].header = copy.deepcopy(input_cube[0].header)
+
+
+
+    for attribute in list(target_cube[0].header.keys()):
+        if not (attribute == ''):
+            if ((attribute[-1] == '1') or  (attribute[-1] == '2') ):
+                mask_cube[0].header[attribute] = copy.deepcopy(target_cube[0].header[attribute])
+
+    mask_cube[0].header['BMAJ'] = target_beam
+    mask_cube[0].header['BMIN'] = target_beam
+
+    output_data = gridder.get_datacube()
+
+    mask_cube[0].data = output_data
+
+    return mask_cube
+
 
 def regrid_map(input_map,
                target_map,
