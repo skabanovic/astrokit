@@ -45,14 +45,15 @@ def struct_average(hdul,
                    weight_map = None,
                    struct_type="leaf",
                    weight = False,
-                   dim = 2):
+                   dim_dendro = 2,
+                   dim_hdul = 3):
 
-    if dim == 2:
+    if dim_dendro == 2:
 
         idx_1 = 0
         idx_2 = 1
 
-    elif dim == 3:
+    elif dim_dendro == 3:
 
         idx_1 = 1
         idx_2 = 2
@@ -65,28 +66,40 @@ def struct_average(hdul,
 
         struct_idx = np.arange(len(dendro))
 
-    ax_len = len(hdul[0].data[:,0,0])
-
     struct_num = len(struct_idx)
 
-    struct_spect = np.zeros([struct_num, ax_len])
+    if dim_hdul == 3:
 
-    for struct in range(struct_num):
+        ax_len = len(hdul[0].data[:,0,0])
 
-        hdul_idx = dendro[struct_idx[struct]].indices(subtree=True)
+        struct_spect = np.zeros([struct_num, ax_len])
 
-        for ax in range(ax_len):
+        for struct in range(struct_num):
 
-            if weight :
+            hdul_idx = dendro[struct_idx[struct]].indices(subtree=True)
 
-                struct_spect[struct, ax] = \
-                np.sum(hdul[0].data[ax,hdul_idx[idx_1][:],hdul_idx[idx_2][:]]\
-                *weight_map[0].data[hdul_idx[idx_1][:],hdul_idx[idx_2][:]])/np.sum(weight_map[0].data[hdul_idx[idx_1][:],hdul_idx[idx_2][:]])
+            for ax in range(ax_len):
 
-            else:
+                if weight :
 
-                struct_spect[struct, ax] = \
-                np.sum(hdul[0].data[ax,hdul_idx[idx_1][:],hdul_idx[idx_2][:]])/(len(hdul_idx[idx_1][:]))
+                    struct_spect[struct, ax] = \
+                    np.sum(hdul[0].data[ax,hdul_idx[idx_1][:],hdul_idx[idx_2][:]]\
+                    *weight_map[0].data[hdul_idx[idx_1][:],hdul_idx[idx_2][:]])/np.sum(weight_map[0].data[hdul_idx[idx_1][:],hdul_idx[idx_2][:]])
+
+                else:
+
+                    struct_spect[struct, ax] = \
+                    np.sum(hdul[0].data[ax,hdul_idx[idx_1][:],hdul_idx[idx_2][:]])/(len(hdul_idx[idx_1][:]))
+
+    elif dim_hdul == 2:
+
+        struct_spect = np.zeros(struct_num)
+
+        for struct in range(struct_num):
+
+            hdul_idx = dendro[struct_idx[struct]].indices(subtree=True)
+
+            struct_spect[struct] = np.sum(hdul[0].data[hdul_idx[idx_1][:], hdul_idx[idx_2][:]])/(len(hdul_idx[idx_1][:]))
 
     return struct_spect
 

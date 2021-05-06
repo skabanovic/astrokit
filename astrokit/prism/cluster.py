@@ -466,10 +466,12 @@ def spectra_clustering(cube,
     return domain_map, probs_cube
 
 
-def cluster_average(cube,
-                    cluster_map,
-                    weight_map = None,
-                    weight_cube = None):
+def cluster_average_spectra(
+    cube,
+    cluster_map,
+    weight_map = None,
+    weight_cube = None
+    ):
 
     cluster_num = int(np.nanmax(cluster_map[0].data)) +1
     len_ax3 = cube[0].header['NAXIS3']
@@ -496,6 +498,20 @@ def cluster_average(cube,
 
     return cluster_spect, cluster_std
 
+def cluster_average_value(
+    input_map,
+    cluster_map
+    ):
+
+    cluster_num = int(np.nanmax(cluster_map[0].data)) +1
+
+    cluster_value = np.zeros(cluster_num)
+
+    for cluster in range(cluster_num):
+
+        cluster_value[cluster] = np.average(input_map[0].data[cluster_map[0].data == cluster])
+
+    return cluster_value
 
 def multi_gauss_fit(cube,
                     rms_map,

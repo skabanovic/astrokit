@@ -510,7 +510,8 @@ def two_layer(bakg_num,
               profile,
               line,
               iso_shift = 0.,
-              abundace_ratio):
+              abundace_ratio,
+              input_colden = False):
 
     forg_sum = np.zeros_like(vel)
     bakg_sum = np.zeros_like(vel)
@@ -522,38 +523,72 @@ def two_layer(bakg_num,
         for i in range(0, (4*bakg_num), 4):
 
             temp_ex  = param[i]
-            tau_0    = param[i+1]
             vel_0    = param[i+2]
             width    = param[i+3]
 
-            tau = line_profile(vel,
-                               tau_0,
-                               vel_0,
-                               width,
-                               abundace_ratio,
-                               profile,
-                               line,
-                               iso_shift,
-                               norm = False)
+            if input_colden:
+
+                colden = param[i+1]
+
+                tau = optical_depth(vel,
+                                    vel_0,
+                                    width,
+                                    temp_ex,
+                                    colden,
+                                    abundace_ratio = abundace_ratio,
+                                    profile = profile,
+                                    line = line,
+                                    iso_shift = iso_shift)
+
+            else:
+
+                tau_0    = param[i+1]
+
+                tau = line_profile(vel,
+                                   tau_0,
+                                   vel_0,
+                                   width,
+                                   abundace_ratio,
+                                   profile,
+                                   line,
+                                   iso_shift,
+                                   norm = False)
 
             bakg_sum += brightness_temperatur(temp_ex, line)*(1. - np.exp(-tau))
 
         for i in range((4*bakg_num), (4*bakg_num+4*forg_num), 4):
 
             temp_ex  = param[i]
-            tau_0    = param[i+1]
             vel_0    = param[i+2]
             width    = param[i+3]
 
-            tau = line_profile(vel,
-                               tau_0,
-                               vel_0,
-                               width,
-                               abundace_ratio,
-                               profile,
-                               line,
-                               iso_shift,
-                               norm = False)
+            if input_colden:
+
+                colden = param[i+1]
+
+                tau = optical_depth(vel,
+                                    vel_0,
+                                    width,
+                                    temp_ex,
+                                    colden,
+                                    abundace_ratio = abundace_ratio,
+                                    profile = profile,
+                                    line = line,
+                                    iso_shift = iso_shift)
+
+            else:
+
+                tau_0    = param[i+1]
+
+                tau = line_profile(vel,
+                                   tau_0,
+                                   vel_0,
+                                   width,
+                                   abundace_ratio,
+                                   profile,
+                                   line,
+                                   iso_shift,
+                                   norm = False)
 
             forg_tau +=  tau
 
@@ -562,22 +597,40 @@ def two_layer(bakg_num,
         return (forg_sum + bakg_sum * np.exp(-forg_tau))
 
     else:
+
         for i in range(0, (4*bakg_num), 4):
 
             temp_ex  = param[i]
-            tau_0    = param[i+1]
             vel_0    = param[i+2]
             width    = param[i+3]
 
-            tau = line_profile(vel,
-                               tau_0,
-                               vel_0,
-                               width,
-                               abundace_ratio,
-                               profile,
-                               line,
-                               iso_shift,
-                               norm = False)
+            if input_colden:
+
+                colden = param[i+1]
+
+                tau = optical_depth(vel,
+                                    vel_0,
+                                    width,
+                                    temp_ex,
+                                    colden,
+                                    abundace_ratio = abundace_ratio,
+                                    profile = profile,
+                                    line = line,
+                                    iso_shift = iso_shift)
+
+            else:
+
+                tau_0    = param[i+1]
+
+                tau = line_profile(vel,
+                                   tau_0,
+                                   vel_0,
+                                   width,
+                                   abundace_ratio,
+                                   profile,
+                                   line,
+                                   iso_shift,
+                                   norm = False)
 
             #print('Tex: ' + str(temp_ex) )
             #print('line: ' + line)
@@ -612,22 +665,23 @@ def temp_mb_error(temp_ex,
 
 
 def plot_2layer_model(spect,
-                     vel,
-                     rms,
-                     fit_param,
-                     bakg_num,
-                     forg_num,
-                     abundace_ratio,
-                     profile = 'gauss',
-                     line = '12co(3-2)',
-                     vel_range = None,
-                     iso_shift = 0.,
-                     res_plot = 0.01,
-                     title = 'Model Fit',
-                     fontsize = 24,
-                     save_image = False,
-                     image_path = './',
-                     image_name = 'plot_2layer_model'):
+                      vel,
+                      rms,
+                      fit_param,
+                      bakg_num,
+                      forg_num,
+                      abundace_ratio,
+                      profile = 'gauss',
+                      line = '12co(3-2)',
+                      input_colden = False,
+                      vel_range = None,
+                      iso_shift = 0.,
+                      res_plot = 0.01,
+                      title = 'Model Fit',
+                      fontsize = 24,
+                      save_image = False,
+                      image_path = './',
+                      image_name = 'plot_2layer_model'):
 
 
     if not vel_range:
@@ -636,24 +690,29 @@ def plot_2layer_model(spect,
 
     vel_plot = np.arange(vel[0], vel[-1], res_plot)
 
+    temp_fit = astrokit.two_layer(
+        bakg_num,
+        forg_num,
+        vel,
+        *fit_param,
+        profile = profile,
+        line = line,
+        iso_shift = iso_shift,
+        abundace_ratio = abundace_ratio,
+        input_colden = input_colden
+        )
 
-    temp_fit = astrokit.two_layer(bakg_num,
-                                  forg_num,
-                                  vel,
-                                  *fit_param,
-                                  profile = profile,
-                                  line = line,
-                                  iso_shift = iso_shift,
-                                  abundace_ratio = abundace_ratio)
-
-    temp_plot = astrokit.two_layer(bakg_num,
-                                  forg_num,
-                                  vel_plot,
-                                  *fit_param,
-                                  profile = profile,
-                                  line = line,
-                                  iso_shift = iso_shift,
-                                  abundace_ratio = abundace_ratio)
+    temp_plot = astrokit.two_layer(
+        bakg_num,
+        forg_num,
+        vel_plot,
+        *fit_param,
+        profile = profile,
+        line = line,
+        iso_shift = iso_shift,
+        abundace_ratio = abundace_ratio,
+        input_colden = input_colden
+        )
 
 
     # determine residula of the fit
@@ -682,33 +741,72 @@ def plot_2layer_model(spect,
 
         # load paramter
         temp_ex = fit_param[idx]
-        tau_0   = fit_param[idx+1]
         vel_0   = fit_param[idx+2]
         width   = fit_param[idx+3]
 
         # determine the optical depth of the background component per velocity chanel
-        bakg_tau[idx_num,:] = astrokit.line_profile(vel_plot,
-                                                    tau_0,
-                                                    vel_0,
-                                                    width,
-                                                    abundace_ratio = abundace_ratio,
-                                                    profile = profile,
-                                                    line = line,
-                                                    iso_shift = iso_shift,
-                                                    norm = False)
 
-        # determine the main beam temperatur of the single background per velocity chanel
-        bakg_temp[idx_num,:] = astrokit.two_layer(1,
-                                                  0,
-                                                  vel_plot,
-                                                  temp_ex,
-                                                  tau_0,
-                                                  vel_0,
-                                                  width,
-                                                  profile = profile,
-                                                  line = line,
-                                                  iso_shift = iso_shift,
-                                                  abundace_ratio = abundace_ratio)
+        if input_colden:
+
+            colden = fit_param[idx+1]
+
+            bakg_tau[idx_num,:] = astrokit.optical_depth(
+                vel_plot,
+                vel_0,
+                width,
+                temp_ex,
+                colden,
+                abundace_ratio = abundace_ratio,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift
+                )
+
+            bakg_temp[idx_num,:] = astrokit.two_layer(
+                1,
+                0,
+                vel_plot,
+                temp_ex,
+                colden,
+                vel_0,
+                width,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift,
+                abundace_ratio = abundace_ratio,
+                input_colden = input_colden
+                )
+
+        else:
+
+            tau_0 = fit_param[idx+1]
+
+            bakg_tau[idx_num,:] = astrokit.line_profile(
+                vel_plot,
+                tau_0,
+                vel_0,
+                width,
+                abundace_ratio = abundace_ratio,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift,
+                norm = False)
+
+            # determine the main beam temperatur of the single background per velocity chanel
+            bakg_temp[idx_num,:] = astrokit.two_layer(
+                1,
+                0,
+                vel_plot,
+                temp_ex,
+                tau_0,
+                vel_0,
+                width,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift,
+                abundace_ratio = abundace_ratio,
+                input_colden = input_colden
+                )
 
         # determine the total background temperatur per velocity chanel
         bakg_temp_sum += bakg_temp[idx_num,:]
@@ -728,33 +826,72 @@ def plot_2layer_model(spect,
     for idx in range((4*bakg_num),(4*bakg_num+4*forg_num), 4):
 
         temp_ex = fit_param[idx]
-        tau_0   = fit_param[idx+1]
         vel_0   = fit_param[idx+2]
         width   = fit_param[idx+3]
 
-        # determine the optical depth of the foreground component per velocity chanel
-        forg_tau[idx_num,:] = astrokit.line_profile(vel_plot,
-                                                    tau_0,
-                                                    vel_0,
-                                                    width,
-                                                    abundace_ratio = abundace_ratio,
-                                                    profile = profile,
-                                                    line = line,
-                                                    iso_shift = iso_shift,
-                                                    norm = False)
 
-        # determine the main beam temperatur of the single foreground per velocity chanel
-        forg_temp[idx_num,:] = astrokit.two_layer(1,
-                                                  0,
-                                                  vel_plot,
-                                                  temp_ex,
-                                                  tau_0,
-                                                  vel_0,
-                                                  width,
-                                                  profile = profile,
-                                                  line = line,
-                                                  iso_shift = iso_shift,
-                                                  abundace_ratio = abundace_ratio)
+        if input_colden:
+
+            colden = fit_param[idx+1]
+
+            forg_tau[idx_num,:] = astrokit.optical_depth(
+                vel_plot,
+                vel_0,
+                width,
+                temp_ex,
+                colden,
+                abundace_ratio = abundace_ratio,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift
+                )
+
+            forg_temp[idx_num,:] = astrokit.two_layer(
+                1,
+                0,
+                vel_plot,
+                temp_ex,
+                colden,
+                vel_0,
+                width,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift,
+                abundace_ratio = abundace_ratio,
+                input_colden = input_colden
+                )
+
+        else:
+
+            tau_0 = fit_param[idx+1]
+
+            # determine the optical depth of the foreground component per velocity chanel
+            forg_tau[idx_num,:] = astrokit.line_profile(
+                vel_plot,
+                tau_0,
+                vel_0,
+                width,
+                abundace_ratio = abundace_ratio,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift,
+                norm = False
+                )
+
+            # determine the main beam temperatur of the single foreground per velocity chanel
+            forg_temp[idx_num,:] = astrokit.two_layer(
+                1,
+                0,
+                vel_plot,
+                temp_ex,
+                tau_0,
+                vel_0,
+                width,
+                profile = profile,
+                line = line,
+                iso_shift = iso_shift,
+                abundace_ratio = abundace_ratio
+                )
 
         # determine the total foreground temperatur per velocity chanel
         forg_temp_sum += forg_temp[idx_num,:]
@@ -822,7 +959,6 @@ def plot_2layer_model(spect,
     plt.plot(vel, spect, color='C3', linewidth=2)
 
     idx_peak = 0
-
 
     tau_max = max(bakg_tau_sum)*1.2
     tau_min = -tau_max*0.05
@@ -1172,7 +1308,9 @@ def forg_2layer_cube(cube_obs,
                      profile_out = 'gauss',
                      line = '12co(3-2)',
                      maxfev = 1000,
-                     max_tau = False):
+                     max_tau = False,
+                     fix_forg_temp = True,
+                     colden_forg_max = None):
 
     axis = 1
     axis_ra = astrokit.get_axis(axis, cube_obs)
@@ -1246,19 +1384,20 @@ def forg_2layer_cube(cube_obs,
             if ((np.max(cube_obs[0].data[:, dec, ra]) > (rms_threshold*cube_rms[0].data[0, dec, ra]))
             and (map_iso_bakg_num[0].data[dec, ra]>0)):
 
-                comp_num = 0
+                comp_forg_num = 0
+                comp_bakg_num = 0
+
+                dark_bakg_num = map_num_bakg[0].data[dec, ra] - map_iso_bakg_num[0].data[dec, ra]
 
                 continue_loop = True
 
-                use_cluster_bagk = 0
-
                 bakg_num_guess   = int(map_iso_bakg_num[0].data[dec, ra])
 
-                while (comp_num < map_num_forg[0].data[dec, ra]) and continue_loop:
+                while (comp_forg_num < map_num_forg[0].data[dec, ra]) and continue_loop:
 
-                    guess     = np.zeros( 4*bakg_num_guess + 4*(comp_num+1))
-                    bound_min = np.zeros( 4*bakg_num_guess + 4*(comp_num+1))
-                    bound_max = np.zeros( 4*bakg_num_guess + 4*(comp_num+1))
+                    guess     = np.zeros( 4*bakg_num_guess + 4*(comp_forg_num+1))
+                    bound_min = np.zeros( 4*bakg_num_guess + 4*(comp_forg_num+1))
+                    bound_max = np.zeros( 4*bakg_num_guess + 4*(comp_forg_num+1))
 
                     for param in range(0, int(map_iso_bakg_num[0].data[dec, ra])*4, 4):
 
@@ -1280,10 +1419,10 @@ def forg_2layer_cube(cube_obs,
                         bound_max[param+3] = guess[param+3] + abs(guess[param+3]*fit_const)
 
 
-                    if use_cluster_bagk == 1:
+                    if ((dark_bakg_num > 0) and (comp_bakg_num >0)):
 
                         for param in range(int(map_iso_bakg_num[0].data[dec, ra])*4,
-                                           int(map_num_bakg[0].data[dec, ra])*4, 4):
+                                           bakg_num_guess*4, 4):
 
                             if max_tau:
 
@@ -1296,8 +1435,6 @@ def forg_2layer_cube(cube_obs,
                             else:
 
                                 tau_max = abundace_ratio
-
-
 
                             guess[param]   = cube_bakg_guess[0].data[param,   dec, ra]
                             guess[param+1] = tau_max/10.
@@ -1327,15 +1464,41 @@ def forg_2layer_cube(cube_obs,
                         guess[param+2] = cube_forg_guess[0].data[param_forg+2, dec, ra]
                         guess[param+3] = cube_forg_guess[0].data[param_forg+3, dec, ra]
 
-                        bound_min[param]   = cube_forg_bound_min[0].data[param_forg, dec, ra]
+                        if fix_forg_temp:
+
+                            bound_min[param]   = guess[param] - abs(guess[param]*fit_const)
+                            bound_max[param]   = guess[param] + abs(guess[param]*fit_const)
+
+                        else:
+
+                            bound_min[param]   = cube_forg_bound_min[0].data[param_forg, dec, ra]
+                            bound_max[param]   = cube_forg_bound_max[0].data[param_forg, dec, ra]
+
+
                         bound_min[param+1] = cube_forg_bound_min[0].data[param_forg+1, dec, ra]
                         bound_min[param+2] = cube_forg_bound_min[0].data[param_forg+2, dec, ra]
                         bound_min[param+3] = cube_forg_bound_min[0].data[param_forg+3, dec, ra]
 
-                        bound_max[param]   = cube_forg_bound_max[0].data[param_forg, dec, ra]
-                        bound_max[param+1] = cube_forg_bound_max[0].data[param_forg+1, dec, ra]
+
                         bound_max[param+2] = cube_forg_bound_max[0].data[param_forg+2, dec, ra]
                         bound_max[param+3] = cube_forg_bound_max[0].data[param_forg+3, dec, ra]
+
+                        if colden_forg_max:
+
+                            bound_max[param+1] = astrokit.optical_depth(
+                                0.,
+                                0.,
+                                bound_max[param+3],
+                                bound_max[param],
+                                colden_forg_max,
+                                abundace_ratio = abundace_ratio,
+                                profile = profile_out,
+                                line = line,
+                                iso_shift = 0.)
+
+                        else:
+
+                            bound_max[param+1] = cube_forg_bound_max[0].data[param_forg+1, dec, ra]
 
                         param_forg += 4
 
@@ -1352,7 +1515,7 @@ def forg_2layer_cube(cube_obs,
 
                         popt_new, pcov_new = curve_fit(lambda vel,
                                                        *param: astrokit.two_layer(bakg_num_guess,
-                                                                                  comp_num+1,
+                                                                                  comp_forg_num+1,
                                                                                   vel_obs,
                                                                                   *param,
                                                                                   profile = profile_fit,
@@ -1369,7 +1532,7 @@ def forg_2layer_cube(cube_obs,
                         if first_try == 0:
 
                             comp_bakg_old = bakg_num_guess
-                            comp_forg_old = comp_num+1
+                            comp_forg_old = comp_forg_num+1
                             popt_old = popt_new
                             first_try = 1
 
@@ -1394,23 +1557,26 @@ def forg_2layer_cube(cube_obs,
 
                             else:
 
-                                if ((use_cluster_bagk == 0)
-                                and (comp_num+1 >= map_iso_bakg_num[0].data[dec, ra])
-                                and (comp_num < map_num_bakg[0].data[dec, ra])
-                                and (map_num_bakg[0].data[dec, ra] > map_iso_bakg_num[0].data[dec, ra])):
+                                if( (dark_bakg_num > 0)
+                                and (comp_bakg_num < dark_bakg_num) ):
 
-                                    use_cluster_bagk = 1
+                                    comp_bakg_num += 1
 
-                                    bakg_num_guess   = int(map_num_bakg[0].data[dec, ra])
+                                    bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra]) + comp_bakg_num
 
                                 else:
 
-                                    comp_num += 1
+                                    comp_forg_num += 1
+
+                                    comp_bakg_num = 0
+
+                                    bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra])
+
 
                         else:
 
                             comp_bakg_new = bakg_num_guess
-                            comp_forg_new = comp_num+1
+                            comp_forg_new = comp_forg_num+1
                             fit_new = astrokit.two_layer(comp_bakg_new,
                                                          comp_forg_new,
                                                          vel_obs,
@@ -1436,49 +1602,60 @@ def forg_2layer_cube(cube_obs,
                                 popt_old = popt_new
                                 chisq_old = chisq_new
 
-                                if ((use_cluster_bagk == 0)
-                                and (comp_num+1 >= map_iso_bakg_num[0].data[dec, ra])
-                                and (comp_num < map_num_bakg[0].data[dec, ra])
-                                and (map_num_bakg[0].data[dec, ra] > map_iso_bakg_num[0].data[dec, ra])):
+                                if (chisq_old < chisq_threshold):
 
-                                    use_cluster_bagk = 1
-
-                                    bakg_num_guess   = int(map_num_bakg[0].data[dec, ra])
+                                    continue_loop = False
 
                                 else:
 
-                                    comp_num += 1
+                                    if( (dark_bakg_num > 0)
+                                    and (comp_bakg_num < dark_bakg_num) ):
+
+                                        comp_bakg_num += 1
+
+                                        bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra]) + comp_bakg_num
+
+                                    else:
+
+                                        comp_forg_num += 1
+
+                                        comp_bakg_num = 0
+
+                                        bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra])
 
                             else:
 
-                                if ((use_cluster_bagk == 0)
-                                and (comp_num+1 == map_num_forg[0].data[dec, ra])
-                                and (map_num_bakg[0].data[dec, ra] > map_iso_bakg_num[0].data[dec, ra])):
+                                if( (dark_bakg_num > 0)
+                                and (comp_bakg_num < dark_bakg_num) ):
 
-                                    use_cluster_bagk = 1
+                                    comp_bakg_num += 1
 
-                                    bakg_num_guess = int(map_num_bakg[0].data[dec, ra])
+                                    bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra]) + comp_bakg_num
 
                                 else:
 
-                                    comp_num += 1
+                                    comp_forg_num += 1
 
-                                    #continue_loop = False
+                                    comp_bakg_num = 0
+
+                                    bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra])
 
                     except:
 
-                        if ((use_cluster_bagk == 0)
-                        and (comp_num+1 >= map_iso_bakg_num[0].data[dec, ra])
-                        and (comp_num < map_num_bakg[0].data[dec, ra])
-                        and (map_num_bakg[0].data[dec, ra] > map_iso_bakg_num[0].data[dec, ra])):
+                        if( (dark_bakg_num > 0)
+                        and (comp_bakg_num < dark_bakg_num) ):
 
-                            use_cluster_bagk = 1
+                            comp_bakg_num += 1
 
-                            bakg_num_guess   = int(map_num_bakg[0].data[dec, ra])
+                            bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra]) + comp_bakg_num
 
                         else:
 
-                            comp_num += 1
+                            comp_forg_num += 1
+
+                            comp_bakg_num = 0
+
+                            bakg_num_guess = int(map_iso_bakg_num[0].data[dec, ra])
 
                 if first_try > 0:
 

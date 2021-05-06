@@ -73,7 +73,7 @@ def plot_spectrum(vel, temp ,
 
 def plot_map(sky_map,
              fontsize=18,
-             figsize = (20, 18),
+             figsize = (25, 15),
              vmin = None, vmax = None,
              ra_lable = 'RA (J2000)',
              dec_lable = 'Dec (J2000)',

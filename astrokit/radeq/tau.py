@@ -643,6 +643,7 @@ def optical_depth_map(main_map,
                       iso_ratio,
                       ratio_norm,
                       error_ratio = 0,
+                      noise_limit = 3.,
                       method = 'bisection'):
 
     tau_map = astrokit.zeros_map(main_map)
@@ -655,7 +656,7 @@ def optical_depth_map(main_map,
         for idx_ax2 in range(len_ax2):
 
             check_1 = (iso_map[0].data[idx_ax2, idx_ax1]*(iso_ratio/ratio_norm)) - main_map[0].data[idx_ax2, idx_ax1]
-            check_2 = iso_map[0].data[idx_ax2, idx_ax1] - (3.*iso_err_map[0].data[idx_ax2, idx_ax1])
+            check_2 = iso_map[0].data[idx_ax2, idx_ax1] - (noise_limit*iso_err_map[0].data[idx_ax2, idx_ax1])
 
             if ((check_1 > 0.) and (check_2 > 0.)):
 
@@ -679,10 +680,34 @@ def optical_depth_map(main_map,
     return tau_map, tau_err_map
 
 
-def excitation_temperatur(temp_mb, line = 'co(3-2)'):
+def excitation_temperatur(
+    temp_mb,
+    tau = 0.,
+    temp_continuum = 0.,
+    line = 'cii',
+    optically_thick = True,
+    ):
 
-    if line == 'co(3-2)':
+    if line=='cii':
 
-        temp_ex = 16.6/np.log(1+16.6/(temp_mb+0.036))
+        freq_0 = 1900.5369e9
+
+    elif line=='12co(3-2)':
+
+        freq_0 = 345.79598990e9
+
+    elif line == '13co(3-2)':
+
+        freq_0 = 330.58796500e9
+
+    temp_0 = (const.h.value*freq_0)/const.k_B.value
+
+    if optically_thick:
+
+        temp_ex = temp_0/np.log(temp_0/(temp_mb+temp_continuum) + 1.)
+
+    else:
+
+        temp_ex = temp_0/np.log(temp_0/(temp_mb+temp_continuum) * (1.-np.exp(-tau)) +1.)
 
     return temp_ex
