@@ -711,3 +711,16 @@ def excitation_temperatur(
         temp_ex = temp_0/np.log(temp_0/(temp_mb+temp_continuum) * (1.-np.exp(-tau)) +1.)
 
     return temp_ex
+
+def jansky_to_kelvin(
+
+    inten_jy, # intensity input in Jy/beam
+    freq,     # frequency in Hz
+    bmaj,     # beam size in arcsec
+    bmin      # beam size in arcsec
+
+):
+
+    inten_k = 1.222e24 * inten_jy / freq**2 / bmaj / bmin
+
+    return inten_k
