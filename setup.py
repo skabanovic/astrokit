@@ -12,7 +12,7 @@ setup(
                       'astropy',
                       'astroquery',
                       'PyAstronomy',
-                      'aplpy',
+                      #'aplpy',
                       'scipy',
                       'sympy',
                       'astrodendro',

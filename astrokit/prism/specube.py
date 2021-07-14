@@ -471,14 +471,14 @@ def chop_cube(vel_min, vel_max, hdul_inp):
     vel = get_axis(grid_axis, hdul_inp)/1e3
 
     idx_min = get_idx(vel_min, vel, 'closer')
-    idx_max = get_idx(vel_max, vel, 'closer')
+    idx_max = get_idx(vel_max, vel, 'closer')+1
 
     empty_cube=np.zeros_like(hdul_inp[0].data[idx_min:idx_max,:,:])
     hdu_chop = fits.PrimaryHDU(empty_cube)
     hdul_chop = fits.HDUList([hdu_chop])
     hdul_chop[0].header=copy.deepcopy(hdul_inp[0].header)
 
-    axis_len  = len(vel[idx_min : idx_max+1])
+    axis_len  = len(vel[idx_min : idx_max])
 
     ref_pos   = hdul_inp[0].header["CRPIX3"]
     step_size = hdul_inp[0].header["CDELT3"]
@@ -487,7 +487,7 @@ def chop_cube(vel_min, vel_max, hdul_inp):
     hdul_chop[0].header["NAXIS3"] = axis_len
     hdul_chop[0].header["CRVAL3"] = ref_value
 
-    hdul_chop[0].data=hdul_inp[0].data[idx_min:idx_max+1,:,:]
+    hdul_chop[0].data=hdul_inp[0].data[idx_min:idx_max,:,:]
 
     return hdul_chop
 
@@ -784,6 +784,16 @@ def average_volume(hdul_inp,
 
     spect_aver[0].header['NAXIS']=1
 
+    # reference grid position of axis
+    spect_aver[0].header["CRPIX1"] = hdul_inp[0].header["CRPIX3"]
+
+    # step size of axis
+    spect_aver[0].header["CDELT1"] = hdul_inp[0].header["CDELT3"]
+
+    # value of reference grid position of axis
+    spect_aver[0].header["CRVAL1"] = hdul_inp[0].header["CRVAL3"]
+
+
     hdul_inp[0].data=np.nan_to_num(hdul_inp[0].data)
 
     grid2d_ra, grid2d_dec = get_grid(hdul_inp)
@@ -794,7 +804,7 @@ def average_volume(hdul_inp,
             grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
 
         elif shape == "sphere":
-            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+((grid2d_ra-pos[0])*np.cos(Angle(pos[1]*u.deg)) )**2)
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+((grid2d_ra-pos[0])*np.cos(Angle(pos[1]*u.deg).rad) )**2)
 
 
         if radius_2:
@@ -826,6 +836,74 @@ def average_volume(hdul_inp,
 
     return spect_aver
 
+def average_intensity(
+
+    hdul_inp,
+    pos,
+    shape,
+    radius = None,
+    radius_2 = None,
+    width = None,
+    height = None,
+    weight = None
+
+):
+
+    hdul_inp[0].data=np.nan_to_num(hdul_inp[0].data)
+
+    dim_inp = hdul_inp[0].header['NAXIS']
+
+    if dim_inp == 2:
+
+        map_inp = astrokit.zeros_map(hdul_inp)
+
+        map_inp[0].data = hdul_inp[0].data
+
+    elif dim_inp == 3:
+
+        order = 0
+
+        map_inp = astrokit.moment_N(order, hdul_inp)
+
+
+    grid2d_ra, grid2d_dec = astrokit.get_grid(map_inp)
+
+    if shape == "circle" or shape == "sphere":
+        # determie the distance from the line points to every grid point
+        if shape == "circle":
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
+
+        elif shape == "sphere":
+
+            grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+((grid2d_ra-pos[0])*np.cos(Angle(pos[1]*u.deg)) )**2)
+
+
+        if radius_2:
+
+            grid2d_sig3=grid2d_r[np.where( np.logical_and(grid2d_r>=radius, grid2d_r<=radius_2))]
+
+        else:
+
+            # find relavant coordinat values
+            grid2d_sig3=grid2d_r[np.where( grid2d_r <= radius )]
+
+        bool_sig3 = np.isin(grid2d_r, grid2d_sig3)
+        idx_sig3=np.asarray(np.where(bool_sig3))
+
+        if weight:
+
+            aver_inten = np.average(
+                map_inp[0].data[idx_sig3[0, :], idx_sig3[1, :]],
+                weights = weight[0].data[idx_sig3[0, :], idx_sig3[1, :]])
+
+        else:
+
+            aver_inten = np.average(map_inp[0].data[idx_sig3[0, :], idx_sig3[1, :]])
+
+    else:
+        print("error: no valid shape entered")
+
+    return aver_inten
 
 def interp_spect(vel, line, vel_interp):
 

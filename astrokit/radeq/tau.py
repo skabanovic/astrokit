@@ -724,3 +724,55 @@ def jansky_to_kelvin(
     inten_k = 1.222e24 * inten_jy / freq**2 / bmaj / bmin
 
     return inten_k
+
+
+def optical_depth_hisa(
+
+    temp_diff,
+    temp_hisa,
+    temp_off,
+    temp_cont,
+    p = 1., # background to foreground ratio, with p=1 no foreground
+
+):
+
+    tau_hisa = -np.log(1.-temp_diff/(temp_hisa-p*temp_off-temp_cont))
+
+    return tau_hisa
+
+
+def column_density_hisa(
+
+    tau_hisa,
+    vel_hisa, # in km/s
+    temp_spin, # in K
+    channel_width = 1., # in km/s
+    methode = 'integral'
+):
+
+    if methode == 'integral':
+
+        inten =  np.trapz(tau_hisa, vel_hisa)
+
+    elif methode == 'channel':
+
+        inten = tau_hisa*channel_width
+
+    colden_hisa = 1.8224e18 * temp_spin * inten
+
+    return colden_hisa
+
+
+def temp_hisa(
+
+    temp_diff,
+    tau_hisa,
+    temp_off,
+    temp_cont,
+    p = 1.,
+
+):
+
+    temp_hisa = temp_diff/(1-np.exp(-tau_hisa)) +p*temp_off+temp_cont
+
+    return temp_hisa

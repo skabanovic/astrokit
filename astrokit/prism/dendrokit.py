@@ -21,7 +21,12 @@ import copy
 #
 #############################################################
 
-def find_struct(dendro, struct_type="leaf"):
+def find_struct(
+
+    dendro,
+    struct_type="leaf"
+
+):
 
     struct_num=0
     struct_idx = []
@@ -40,13 +45,17 @@ def find_struct(dendro, struct_type="leaf"):
 
 
 
-def struct_average(hdul,
-                   dendro,
-                   weight_map = None,
-                   struct_type="leaf",
-                   weight = False,
-                   dim_dendro = 2,
-                   dim_hdul = 3):
+def struct_average(
+
+    hdul,
+    dendro,
+    weight_map = None,
+    struct_type="leaf",
+    weight = False,
+    dim_dendro = 2,
+    dim_hdul = 3
+
+):
 
     if dim_dendro == 2:
 
@@ -104,7 +113,15 @@ def struct_average(hdul,
     return struct_spect
 
 
-def struct_size(sky_map, dendro, dist, dist_err = 0, struct_type = "leaf"):
+def struct_size(
+
+    sky_map,
+    dendro,
+    dist,
+    dist_err = 0,
+    struct_type = "leaf"
+
+):
 
     res_ra = abs(sky_map[0].header["CDELT1"])
     res_dec = abs(sky_map[0].header["CDELT2"])
@@ -157,14 +174,18 @@ def struct_size(sky_map, dendro, dist, dist_err = 0, struct_type = "leaf"):
     return area_size, area_size_err
 
 
-def struct_mass(colden,
-                colden_err,
-                dendro,
-                dist,
-                dist_err = 0,
-                abundance_ratio = 1.2e-4,
-                struct_type = "leaf",
-                line = 'cii'):
+def struct_mass(
+
+    colden,
+    colden_err,
+    dendro,
+    dist,
+    dist_err = 0,
+    abundance_ratio = 1.2e-4,
+    struct_type = "leaf",
+    line = 'cii'
+
+):
 
     hydro_mass = 1.6735575e-27
 

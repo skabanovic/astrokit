@@ -24,12 +24,178 @@ from astropy.coordinates import Angle
 
 import cygrid
 
+def regrid_map(map_inp,
+               map_ref,
+               beam_new = None,
+               beam_old = None,
+               coor_inp = 'icrs',
+               coor_ref = 'icrs'):
+
+    if beam_new:
+
+        beam_new = Angle(beam_new*u.arcsec)
+
+        if beam_old:
+
+            beam_inp = Angle(beam_old*u.arcsec)
+
+        else:
+
+            beam_inp = Angle(((map_inp[0].header['BMAJ'] + map_inp[0].header['BMIN'])/2.)*u.deg)
+
+        kernel = Angle(np.sqrt(beam_new.deg**2-beam_inp.deg**2)*u.deg)
+
+        if kernel < beam_inp/2.:
+
+            print('Warning: The kernal size is small! Larger beam size is recommended')
+
+    else:
+
+        beam_new = Angle(((map_ref[0].header['BMAJ'] + map_ref[0].header['BMIN'])/2.)*u.deg)
+
+        if beam_old:
+
+            beam_inp = Angle(beam_old*u.arcsec)
+
+        else:
+
+            beam_inp = Angle(((map_inp[0].header['BMAJ'] + map_inp[0].header['BMIN'])/2.)*u.deg )
+
+        if abs(beam_new.deg - beam_inp.deg) <1e-6:
+
+            print('Warning: Both maps have the same beam size and a new beam size is not set! Half of the intial beam size is used for the Gaussian kernal')
+
+            beam_new = Angle(np.sqrt(beam_ref.deg**2 + (beam_ref.deg/2.)**2)*u.deg)
+
+            kernel = Angle((beam_ref.deg/2.)*u.deg)
+
+        else:
+
+            kernel = Angle(np.sqrt(beam_new.deg**2-beam_inp.deg**2)*u.deg)
+
+        if kernel < beam_inp/2.:
+
+            print('Warning: The kernal size is small! Larger beam size is recommended')
+
+
+
+    # nan and inf are set to numbers (e.g. nan to 0)
+    map_inp[0].data=np.nan_to_num(map_inp[0].data)
+
+    # check reference grid dimension
+    dim_ref = map_ref[0].header['NAXIS']
+
+    # create an empty 2d hdulist
+    if (dim_ref == 2):
+        empty_map = np.zeros_like(map_ref[0].data)
+    elif (dim_ref == 3):
+        empty_map = np.zeros_like(map_ref[0].data[0,:,:])
+
+    hdu_mask = fits.PrimaryHDU(empty_map)
+    map_mask = fits.HDUList([hdu_mask])
+
+    # the new (masked) hdulist gets the header of the input fits file
+    map_mask[0].header = copy.deepcopy(map_inp[0].header)
+
+    for attribute in list(map_ref[0].header.keys()):
+        if not (attribute == ''):
+            if ((attribute[-1] == '1') or  (attribute[-1] == '2') ):
+                map_mask[0].header[attribute] = copy.deepcopy(map_ref[0].header[attribute])
+
+    # the grid information in the header of the masked hdulist list are set
+    # to the reference grid
+    #map_mask[0].header['NAXIS1'] = copy.deepcopy(map_ref[0].header['NAXIS1'])
+    #map_mask[0].header['CRPIX1'] = copy.deepcopy(map_ref[0].header['CRPIX1'])
+    #map_mask[0].header['CDELT1'] = copy.deepcopy(map_ref[0].header['CDELT1'])
+    #map_mask[0].header['CRVAL1'] = copy.deepcopy(map_ref[0].header['CRVAL1'])
+
+    #map_mask[0].header['NAXIS2'] = copy.deepcopy(map_ref[0].header['NAXIS2'])
+    #map_mask[0].header['CRPIX2'] = copy.deepcopy(map_ref[0].header['CRPIX2'])
+    #map_mask[0].header['CDELT2'] = copy.deepcopy(map_ref[0].header['CDELT2'])
+    #map_mask[0].header['CRVAL2'] = copy.deepcopy(map_ref[0].header['CRVAL2'])
+
+    map_mask[0].header['BMAJ'] = beam_new.deg
+    map_mask[0].header['BMIN'] = beam_new.deg
+
+    if coor_ref != coor_inp:
+
+        grid_1_trans, grid_2_trans = astrokit.get_grid(map_inp)
+
+        coor_trans = SkyCoord(grid_1_trans, grid_2_trans, frame = coor_inp, unit='deg')
+
+        if coor_ref == 'icrs':
+
+            grid_1_inp = coor_trans.icrs.ra.deg
+            grid_2_inp = coor_trans.icrs.dec.deg
+
+        elif coor_ref == 'galactic':
+
+            grid_1_inp = coor_trans.galactic.l.deg
+            grid_2_inp = coor_trans.galactic.b.deg
+
+    else:
+
+        # determine 2d grid of the input map
+        grid_1_inp, grid_2_inp = astrokit.get_grid(map_inp)
+
+    # determine 2d grid of the reference map
+    grid_1_ref, grid_2_ref = astrokit.get_grid(map_ref)
+
+    len_ax1 = map_mask[0].header['NAXIS1']
+    len_ax2 = map_mask[0].header['NAXIS2']
+
+    #solid_angle = astrokit.get_solid_angle(map_inp)
+
+    for ax1 in range(len_ax1):
+
+        time_start = time.time()
+
+        for ax2 in range(len_ax2):
+
+            #grid2d_r = np.zeros_like(grid_1_inp)
+
+            grid2d_r = np.sqrt((grid_1_inp - grid_1_ref[ax2, ax1])**2+((grid_2_inp - grid_2_ref[ax2, ax1])*np.cos(grid_2_ref[ax2, ax1]*np.pi/180.))**2)
+            #grid2d_r = np.sqrt((grid_1_inp - grid_1_ref[ax2, ax1])**2+(grid_2_inp - grid_2_ref[ax2, ax1])**2)
+            
+            # define relativ radius (5*sigma)
+            sig5_r = 5.*kernel.deg
+
+            # find relavant coordinat values
+            grid2d_sig5 = grid2d_r[np.where( grid2d_r < sig5_r )]
+
+            bool_sig5 = np.isin(grid2d_r, grid2d_sig5)
+            idx_sig5 = np.asarray(np.where(bool_sig5))
+
+            #print(idx_sig5.shape)
+
+            weight = astrokit.gauss_2d(kernel.deg,
+                                       grid_1_ref[ax2, ax1],
+                                       grid_2_ref[ax2, ax1],
+                                       grid_1_inp[idx_sig5[0, :], idx_sig5[1, :]],
+                                       grid_2_inp[idx_sig5[0, :], idx_sig5[1, :]],
+                                       mode = 'FWHM',
+                                       do_norm = False,
+                                       amp = 1.)
+
+            weight = weight/np.sum(weight)
+
+            intensity = map_inp[0].data[idx_sig5[0, :], idx_sig5[1, :]]
+
+            map_mask[0].data[ax2, ax1] = np.sum(intensity * weight)
+
+        time_end = time.time()
+
+        astrokit.loop_time(ax1, len_ax1, time_start, time_end)
+
+    return map_mask
+
 def regrid_spectral_cube(input_cube,
                          target_cube,
                          input_beam = None,
                          target_beam = None,
                          input_frame = 'icrs',
-                         target_frame = 'icrs'):
+                         target_frame = 'icrs',
+                         target_header = False):
 
     if input_beam:
 
@@ -124,14 +290,60 @@ def regrid_spectral_cube(input_cube,
     hdu_mask = fits.PrimaryHDU(empty_cube)
     mask_cube = fits.HDUList([hdu_mask])
 
-    mask_cube[0].header = copy.deepcopy(input_cube[0].header)
+    if target_header:
+
+        if input_dimension == 2:
+
+            empty_map = astrokit.zeros_map(target_cube)
+
+            mask_cube[0].header = copy.deepcopy(empty_map[0].header)
+
+            for attribute in list(input_cube[0].header.keys()):
+                if not (attribute == ''):
+                    if (attribute == 'BUNIT'):
+                        mask_cube[0].header['BUNIT'] = copy.deepcopy(input_cube[0].header['BUNIT'])
+
+        elif input_dimension == 3:
+
+            mask_cube[0].header = copy.deepcopy(target_cube[0].header)
+
+            for attribute in list(input_cube[0].header.keys()):
+                if not (attribute == ''):
+                    if (attribute[-1] == '3'):
+                        mask_cube[0].header[attribute] = copy.deepcopy(input_cube[0].header[attribute])
+                    elif (attribute == 'BUNIT'):
+                        mask_cube[0].header['BUNIT'] = copy.deepcopy(input_cube[0].header['BUNIT'])
 
 
+    else :
 
-    for attribute in list(target_cube[0].header.keys()):
-        if not (attribute == ''):
-            if ((attribute[-1] == '1') or  (attribute[-1] == '2') ):
-                mask_cube[0].header[attribute] = copy.deepcopy(target_cube[0].header[attribute])
+        mask_cube[0].header = copy.deepcopy(input_cube[0].header)
+
+        use_equinox = False
+
+        for attribute in list(target_cube[0].header.keys()):
+            if not (attribute == ''):
+                if ( (attribute[-1] == '1')
+                or   (attribute[-1] == '2')
+                or   (attribute == 'RA')
+                or   (attribute == 'DEC') ):
+
+                    mask_cube[0].header[attribute] = copy.deepcopy(target_cube[0].header[attribute])
+
+                elif  attribute == 'EQUINOX':
+
+                    use_equinox = True
+
+                    mask_cube[0].header[attribute] = copy.deepcopy(target_cube[0].header[attribute])
+
+
+        if use_equinox:
+
+            for attribute in list(input_cube[0].header.keys()):
+                if not (attribute == ''):
+                    if  attribute == 'EPOCH':
+                        del mask_cube[0].header[attribute]
+
 
     mask_cube[0].header['BMAJ'] = target_beam
     mask_cube[0].header['BMIN'] = target_beam
@@ -614,7 +826,8 @@ def empty_grid(grid_ax1 = None,
                beam_min = None,
                CTYPE1 = 'RA---GLS',
                CTYPE2 = 'DEC--GLS',
-               CTYPE3 = 'VRAD'):
+               CTYPE3 = 'VRAD',
+               EQUINOX = 2000):
 
     len_ax1 = len(grid_ax1)
     len_ax2 = len(grid_ax2)
@@ -658,6 +871,8 @@ def empty_grid(grid_ax1 = None,
 
     output_hdul[0].header["BMAJ"] = beam_maj
     output_hdul[0].header["BMIN"] = beam_min
+
+    output_hdul[0].header["EQUINOX"] = EQUINOX
 
     if ref_value_ax3 or ref_value_ax3 == 0:
 
