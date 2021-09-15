@@ -19,7 +19,9 @@ setup(
                       'matplotlib',
                       'pandas',
                       'scikit-learn',
-                      'pomegranate',
+                      'joblib',
+                      'reproject',
+                      #'pomegranate',
                       'cygrid'],
     # scripts=[
     #          'astro/celestial.py',
