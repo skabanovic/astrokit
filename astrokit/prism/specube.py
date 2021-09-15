@@ -525,20 +525,28 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
 
             rms_mask[start_idx:end_idx]=1
 
+
         spect_mask = ma.masked_array(spect, rms_mask)
 
         # set the emission in the spectrum to 0
         spect_noise[spect_mask.mask]=0.0
 
+        num_of_zeros = np.zeros_like(spect_noise)
+        num_of_zeros[spect_noise == 0] = 1
+
         # determine the rms of the noise
-        rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)))
+        #rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)))
+        rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)- np.sum(num_of_zeros)))
 
     elif range:
 
         idx_min = get_idx(rms_range[0], vel, 'closer')
         idx_max = get_idx(rms_range[1], vel, 'closer')
 
-        rms_noise = np.sqrt(sum(spect[idx_min:idx_max]**2)/(len(spect[idx_min:idx_max])))
+        num_of_zeros = np.zeros_like(spect)
+        num_of_zeros[spect == 0] = 1
+
+        rms_noise = np.sqrt(sum(spect[idx_min:idx_max]**2)/(len(spect[idx_min:idx_max])-np.sum(num_of_zeros)))
 
     return rms_noise
 
@@ -1058,10 +1066,10 @@ def pi_diagram(path, hdul, radius = None):
     for pos in range(len(intens)):
 
         # determie the distance from the line points to every grid point
-        grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+(grid2d_ax1-path[0, pos])**2)
+        grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+( (grid2d_ax1-path[0, pos])*np.cos(path[1, pos]*np.pi/180.) )**2)
 
         # define relativ radius (3*sigma)
-        sig3_r= radius.deg
+        sig3_r= 3.*radius.deg
 
         # find relavant coordinat values
         grid2d_sig3 = grid2d_r[np.where( grid2d_r < sig3_r )]
@@ -1130,10 +1138,10 @@ def pv_diagram(path,
     for pos in range(len(path[0,:])):
 
         # determie the distance from the line points to every grid point
-        grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+(grid2d_ax1-path[0, pos])**2)
+        grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+((grid2d_ax1-path[0, pos])*np.cos(path[1, pos]*np.pi/180.))**2)
 
         # define relativ radius (3*sigma)
-        sig3_r = radius.deg
+        sig3_r = 3.* radius.deg
 
         # find relavant coordinat values
         grid2d_sig3=grid2d_r[np.where( grid2d_r < sig3_r )]
