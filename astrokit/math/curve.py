@@ -15,9 +15,34 @@ def line(ax, slope, offset):
     return slope*ax+offset
 
 
-def gauss(ax, amp, ax_0, width):
-    beta = 4.*np.log(2.)
-    return amp*np.exp(-(ax-ax_0)**2*beta/(width**2))
+def gauss(
+
+    ax,
+    amp,
+    ax_0,
+    width,
+    width_type = 'fwhm',
+    norm = False
+):
+
+    """
+
+    test
+
+    """
+
+    if width_type == 'fwhm':
+
+        beta = 4.*2.*np.log(2.)
+
+    elif width_type == 'variance':
+
+        beta = 1.
+
+    if norm:
+        amp = np.sqrt(beta)/width/np.sqrt(2.*np.pi)
+
+    return amp*np.exp(-(ax-ax_0)**2*beta/2./width**2)
 
 def gauss_multi(ax, *param):
 
