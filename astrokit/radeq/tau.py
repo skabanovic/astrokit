@@ -18,6 +18,104 @@ from astrokit.num import solver
 
 from astropy.coordinates import Angle
 
+from scipy.optimize import curve_fit
+from IPython.display import clear_output
+
+from scipy.optimize import brentq
+
+from joblib import Parallel, delayed
+
+def black_body(
+    wave,
+    temp,
+    unit='frequency',
+    system_of_units = 'SI'):
+
+    if system_of_units == 'SI':
+
+        plank_const = const.h.si.value
+        light_speed = const.c.si.value
+        boltzmann_const = const.k_B.si.value
+
+    elif system_of_units == 'cgs':
+
+        plank_const = const.h.cgs.value
+        light_speed = const.c.cgs.value
+        boltzmann_const = const.k_B.cgs.value
+
+    if unit == 'frequency':
+
+         spectral_radiance = 2.*plank_const*wave**3/light_speed**2/(np.exp(plank_const*wave/boltzmann_const/temp)-1.)
+
+    elif unit == 'wavelength':
+
+        spectral_radiance = 2.*plank_const*light_speed**2/wave**5/(np.exp(plank_const*light_speed/wave/boltzmann_const/temp)-1.)
+
+    else:
+        print('error: unit is not correct')
+
+
+    return spectral_radiance
+
+
+def specific_dust_opacity(
+
+    wave,
+    beta,
+    unit = 'frequency',
+    system_of_units = 'cgs',
+):
+
+    if system_of_units == 'cgs':
+
+        if unit == 'frequency':
+
+            kappa = 0.1 *(wave/1e12)**beta
+
+        elif unit == 'wavelength':
+
+            kappa = 0.1 *(3e-4/wave)**beta
+
+        else:
+
+            print('error: unit is not correct')
+    else:
+        print('error: not supported system of unit chosen')
+
+    return kappa
+
+def gray_body(
+
+    wave,
+    temp,
+    colden,
+    unit='frequency',
+    system_of_units = 'cgs',
+    version = 'Hildebrand+1983'
+
+):
+
+    if version == 'Hildebrand+1983':
+
+        beta = 2.
+
+        intensity = colden \
+            *  specific_dust_opacity(
+
+                wave,
+                beta,
+                unit,
+                system_of_units
+            ) \
+            *black_body(
+
+                wave,
+                temp,
+                unit,
+                system_of_units
+            )
+
+    return intensity
 
 def galactic_carbon_ratio(dist, dist_err):
 
@@ -776,3 +874,383 @@ def temp_hisa(
     temp_hisa = temp_diff/(1-np.exp(-tau_hisa)) +p*temp_off+temp_cont
 
     return temp_hisa
+
+def SED_fit(
+
+    dust_intensity,
+    frequency,
+    guess,
+    bound_min,
+    bound_max,
+    weight,
+    maxfev = 100,
+    aver_mol_wei = 2.33
+
+):
+
+    hydrogen_mass = aver_mol_wei*const.m_p.cgs.value
+
+    try:
+
+        if np.sum(dust_intensity) == 0:
+
+            temp_dust = 0
+
+            colden_dust = 0
+
+        else:
+
+            popt, pcov = curve_fit(
+
+                lambda wave, temp, colden: astrokit.gray_body(
+
+                    wave,
+                    temp,
+                    colden,
+                    unit='frequency',
+                    system_of_units = 'cgs',
+                    version = 'Hildebrand+1983'
+
+                ),
+
+                frequency,
+                dust_intensity,
+                sigma = weight,
+                p0 = guess,
+                bounds = (bound_min, bound_max),
+                maxfev = maxfev
+            )
+
+            temp_dust = popt[0]
+
+            colden_dust = popt[1]/hydrogen_mass
+
+
+    except RuntimeError:
+
+        temp_dust = 0
+
+        colden_dust = 0
+
+
+    return temp_dust, colden_dust
+
+def SED_map(
+
+    input_maps,
+    frequency = [],
+    wavelength = [],
+    guess = [10, 1e21],
+    bound_min = [2.7, 0.0],
+    bound_max = [100, 1e24],
+    weight = [],
+    num_cores = 1,
+    maxfev = 100,
+    input_map_unit = 'MJy/sr',
+    aver_mol_wei = 2.33
+):
+
+
+    hydrogen_mass = aver_mol_wei*const.m_p.cgs.value
+
+    guess[1] = guess[1]*hydrogen_mass
+    bound_min[1] = bound_min[1]*hydrogen_mass
+    bound_max[1] = bound_max[1]*hydrogen_mass
+
+
+    if input_map_unit == 'MJy/sr':
+
+        unit_to_cgs = 1e-17
+
+
+    if len(frequency) == 0:
+
+        frequency = const.c.value/wavelength
+
+
+    if len(frequency) == 4:
+
+        print('started 500 um map')
+
+    elif len(frequency) == 3:
+
+        print('started 350 um map')
+
+    colden_dust_map = astrokit.zeros_map(input_maps[-1])
+    temp_dust_map = astrokit.zeros_map(input_maps[-1])
+
+
+    if len(weight) == 0:
+
+        weight = np.zeros(len(frequency))
+
+        weight[:] = unit_to_cgs
+
+    else:
+
+        weight = weight*unit_to_cgs
+
+
+    len_ra = colden_dust_map[0].header['NAXIS1']
+    len_dec = colden_dust_map[0].header['NAXIS2']
+
+    dust_intensity_cube = np.zeros([len(frequency), len_dec, len_ra])
+
+    for ra in range(len_ra):
+
+        for dec in range(len_dec):
+
+            for freq in range(len(frequency)):
+
+                dust_intensity_cube[freq, dec, ra] =  np.nan_to_num(input_maps[freq][0].data[dec, ra])*unit_to_cgs
+
+
+    dust_intensity_list = dust_intensity_cube.reshape(len(frequency), len_dec*len_ra).transpose()
+
+    output_list  = Parallel(n_jobs=num_cores)(delayed(SED_fit)(dust_intensity, frequency, guess, bound_min, bound_max, weight, maxfev = maxfev, aver_mol_wei = aver_mol_wei) for dust_intensity in dust_intensity_list)
+
+    temp_dust_list = np.zeros(len_dec*len_ra)
+    colden_dust_list = np.zeros(len_dec*len_ra)
+
+    for list_entry in range(len(output_list)):
+
+        temp_dust_list[list_entry] = output_list[list_entry][0]
+        colden_dust_list[list_entry] = output_list[list_entry][1]
+
+
+    temp_dust_map[0].data = temp_dust_list.reshape(len_dec,len_ra)
+    colden_dust_map[0].data = colden_dust_list.reshape(len_dec,len_ra)
+
+    return temp_dust_map, colden_dust_map
+
+def dust_flux_ratio(
+
+    temp,
+    observed_ratio,
+    beta,
+    frequency = [],
+    wavelength = [],
+
+):
+
+    if len(frequency) == 0:
+
+        frequency = const.c.value/wavelength
+
+    if len(wavelength) == 0:
+
+        wavelength = const.c.value/frequency
+
+
+    flux = np.zeros(2)
+
+    flux[0] = astrokit.black_body(
+
+        frequency[0],
+        temp,
+        unit='frequency',
+        system_of_units = 'SI'
+
+    )
+
+    flux[1] = astrokit.black_body(
+
+        frequency[1],
+        temp,
+        unit='frequency',
+        system_of_units = 'SI'
+
+    )
+
+
+    flux_ratio = flux[0]/flux[1]*(wavelength[1]/wavelength[0])**beta
+
+
+    return observed_ratio - flux_ratio
+
+
+def dust_colden_map(
+
+    input_maps,
+    frequency = [],
+    wavelength = [],
+    temp_range = [],
+    beta = 2,
+    method = 'bisection',
+    input_map_unit = 'MJy/sr',
+    average_molecular_weight = 2.33
+):
+
+    if input_map_unit == 'MJy/sr':
+
+        unit_to_cgs = 1e-17
+
+    if len(frequency) == 0:
+
+        frequency = const.c.value/wavelength
+
+    if len(wavelength) == 0:
+
+        wavelength = const.c.value/frequency
+
+    if len(temp_range) == 0:
+
+        temp_range = [2.7, 100]
+
+
+    colden_dust_map = astrokit.zeros_map(input_maps[-1])
+    temp_dust_map = astrokit.zeros_map(input_maps[-1])
+
+
+    len_ra = colden_dust_map[0].header['NAXIS1']
+    len_dec = colden_dust_map[0].header['NAXIS2']
+
+    observed_flux = np.zeros(2)
+
+    for ra in range(len_ra):
+
+        clear_output(wait=True)
+        print('Progress: ' + '#'* int((ra/len_ra)*30+1) + ' '+ str(round((ra/(len_ra-1))*100, 1))+'%')
+
+        for dec in range(len_dec):
+
+            observed_flux[0] = np.nan_to_num(input_maps[0][0].data[dec, ra]) * unit_to_cgs
+            observed_flux[1] = np.nan_to_num(input_maps[1][0].data[dec, ra]) * unit_to_cgs
+
+            if ((observed_flux[0]>0) and (observed_flux[1]>0)):
+
+                observed_ratio = observed_flux[0]/observed_flux[1]
+
+                if method == 'bisection':
+
+                    temp_dust_map[0].data[dec, ra] = astrokit.solver.bisection(
+                        lambda temp : dust_flux_ratio(
+
+                            temp,
+                            observed_ratio,
+                            beta,
+                            frequency,
+                            wavelength
+                        ),
+                        pos_1 = temp_range[0],
+                        pos_2 = temp_range[1],
+                        resolution = 1e-6,
+                        max_step = 1e6
+                    )
+
+                elif method == 'brentq':
+
+                    try:
+
+                        temp_dust_map[0].data[dec, ra] = brentq(
+                            lambda temp : dust_flux_ratio(
+
+                                temp,
+                                observed_ratio,
+                                beta,
+                                frequency,
+                                wavelength
+                            ),
+                            a = temp_range[0],
+                            b = temp_range[1]
+                        )
+
+                    except:
+                        pass
+
+
+            if (temp_dust_map[0].data[dec, ra] > temp_range[1]):
+
+                temp_dust_map[0].data[dec, ra] = 0
+
+            elif (temp_dust_map[0].data[dec, ra] < temp_range[0]):
+
+                temp_dust_map[0].data[dec, ra] = temp_range[0]
+
+                colden_dust_map[0].data[dec, ra] = observed_flux[1] \
+                                                 / astrokit.specific_dust_opacity(frequency[1], beta, unit = 'frequency', system_of_units = 'cgs') \
+                                                 /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], unit='frequency', system_of_units = 'cgs') \
+                                                 /  const.m_p.cgs.value / average_molecular_weight
+
+            else :
+
+                colden_dust_map[0].data[dec, ra] = observed_flux[1] \
+                                                 / astrokit.specific_dust_opacity(frequency[1], beta, unit = 'frequency', system_of_units = 'cgs') \
+                                                 /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], unit='frequency', system_of_units = 'cgs') \
+                                                 /  const.m_p.cgs.value / average_molecular_weight
+
+
+    return temp_dust_map, colden_dust_map
+
+
+def highres_dust_colden(
+
+    input_map_250,
+    input_map_350,
+    input_map_500
+
+    ):
+
+    highres_colden = astrokit.zeros_map(input_map_250)
+
+    beam_500 = (input_map_500[0].header['BMAJ'] + input_map_500[0].header['BMIN'])*3600/2.
+    beam_350 = (input_map_350[0].header['BMAJ'] + input_map_350[0].header['BMIN'])*3600/2.
+    beam_250 = (input_map_250[0].header['BMAJ'] + input_map_250[0].header['BMIN'])*3600/2.
+
+    #print('sum map_250: '+ str(np.sum(input_map_250[0].data)))
+    #print('sum map_350: '+ str(np.sum(input_map_350[0].data)))
+    #print('sum map_500: '+ str(np.sum(input_map_500[0].data)))
+
+    map_500_350 = astrokit.regrid_spectral_cube(
+
+        input_map_350,
+        input_map_350,
+        input_beam = beam_350,
+        target_beam = beam_500,
+        input_frame = 'icrs',
+        target_frame = 'icrs',
+        target_header = False
+
+    )
+
+    map_350_250 = astrokit.regrid_spectral_cube(
+
+        input_map_250,
+        input_map_250,
+        input_beam = beam_250,
+        target_beam = beam_350,
+        input_frame = 'icrs',
+        target_frame = 'icrs',
+        target_header = False
+
+    )
+
+    #print('sum map_350_250: '+ str(np.sum(map_350_250[0].data)))
+    #print('sum map_500_350: '+ str(np.sum(map_500_350[0].data)))
+
+    len_ra = input_map_500[0].header['NAXIS1']
+    len_dec = input_map_500[0].header['NAXIS2']
+
+    for ra in range(len_ra):
+        for dec in range(len_dec):
+
+            #if np.isnan(input_map_350[0].data[dec, ra]) or np.isinf(input_map_350[0].data[dec, ra]) \
+            #or np.isnan(input_map_250[0].data[dec, ra]) or np.isinf(input_map_250[0].data[dec, ra]) \
+            #or np.isnan(map_500_350[0].data[dec, ra]) or np.isinf(map_500_350[0].data[dec, ra]) \
+            #or np.isnan(map_350_250[0].data[dec, ra]) or np.isinf(map_350_250[0].data[dec, ra]):
+
+            #    highres_colden[0].data[dec, ra] = input_map_500[0].data[dec, ra]
+
+            #else:
+
+            if ((input_map_500[0].data[dec, ra] == 0) or (input_map_350[0].data[dec, ra] == 0)):
+
+                highres_colden[0].data[dec, ra] = input_map_250[0].data[dec, ra]
+
+            else:
+
+                highres_colden[0].data[dec, ra] = input_map_500[0].data[dec, ra] \
+                                                + (input_map_350[0].data[dec, ra] - map_500_350[0].data[dec, ra]) \
+                                                + (input_map_250[0].data[dec, ra] - map_350_250[0].data[dec, ra])
+
+    return highres_colden
