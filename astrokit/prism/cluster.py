@@ -4,7 +4,7 @@ from sklearn.cluster import SpectralClustering
 import numpy as np
 import astrokit
 import copy
-import pomegranate
+#import pomegranate
 from scipy.optimize import curve_fit
 
 from astropy.coordinates import Angle
@@ -12,7 +12,7 @@ import astropy.units as u
 
 def cluster_information(cube,
                         cluster_range,
-                        weight=None,
+                        #weight=None,
                         methode = 'BIC',
                         reduce_dim = 'pca',
                         norm = 'mean',
@@ -37,9 +37,9 @@ def cluster_information(cube,
     # to a list of (dimY x dimX) spectra of length dimV
     flat_data_masked = cube[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
 
-    if weight:
-        flat_weight_masked = weight[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
-        flat_weight = flat_weight_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
+    #if weight:
+    #    flat_weight_masked = weight[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
+    #    flat_weight = flat_weight_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
 
     # Consider only the points that are not masked
     flat_data = flat_data_masked[~np.isnan(np.sum(flat_data_masked,axis=1))]
@@ -54,8 +54,8 @@ def cluster_information(cube,
 
         flat_data = flat_data[:, rms_of_dim>rms_threshold]
 
-        if weight:
-            flat_weight = flat_weight[:, rms_of_dim>rms_threshold]
+    #    if weight:
+    #        flat_weight = flat_weight[:, rms_of_dim>rms_threshold]
 
         print('Feature space is reduced from '+str(dim_ax3)+' to '+str(np.shape(flat_data)[1])+' dimensions')
 
@@ -175,17 +175,17 @@ def cluster_information(cube,
 
         sample_data = reduced_data[indices]
 
-        if weight:
+    #    if weight:
 
-            sample_weight = flat_weight[indices]
+    #        sample_weight = flat_weight[indices]
 
     else:
 
         sample_data = reduced_data
 
-        if weight:
+    #    if weight:
 
-            sample_weight = flat_weight
+    #        sample_weight = flat_weight
 
 
 
@@ -195,46 +195,50 @@ def cluster_information(cube,
 
     for cluster in cluster_list:
 
-        if weight:
+    #    if weight:
+    #
+    #        #Make the GMM model using pomegranate
+    #        model = pomegranate.gmm.GeneralMixtureModel.from_samples(
+    #            pomegranate.MultivariateGaussianDistribution,   #Either single function, or list of functions
+    #            n_components = cluster,     #Required if single function passed as first arg
+    #            X = sample_data,     #data format: each row is a point-coordinate, each column is a dimension
+    #            stop_threshold = 0.01,  #Lower this value to get better fit but take longer.
+    #            max_iterations = 100
+    #            )
+    #
+    #        #Force the model to train again, using additional fitting parameters
+    #        model.fit(
+    #            X = sample_data,         #data format: each row is a coordinate, each column is a dimension
+    #            weights = sample_weight,  #List of weights. One for each point-coordinate
+    #            stop_threshold = 0.01,  #Lower this value to get better fit but take longer.
+    #            max_iterations = 100
+    #                        #   (sklearn likes better/slower fits than pomegrante by default)
+    #            )
 
-            #Make the GMM model using pomegranate
-            model = pomegranate.gmm.GeneralMixtureModel.from_samples(
-                pomegranate.MultivariateGaussianDistribution,   #Either single function, or list of functions
-                n_components = cluster,     #Required if single function passed as first arg
-                X = sample_data,     #data format: each row is a point-coordinate, each column is a dimension
-                stop_threshold = 0.01,  #Lower this value to get better fit but take longer.
-                max_iterations = 100
-                )
+    #    else:
 
-            #Force the model to train again, using additional fitting parameters
-            model.fit(
-                X = sample_data,         #data format: each row is a coordinate, each column is a dimension
-                weights = sample_weight,  #List of weights. One for each point-coordinate
-                stop_threshold = 0.01,  #Lower this value to get better fit but take longer.
-                max_iterations = 100
-                            #   (sklearn likes better/slower fits than pomegrante by default)
-                )
+        model = GaussianMixture(
 
-        else:
+            n_components = cluster,
+            covariance_type ='full',
+            tol = threshold,
+            max_iter = gmm_iter
 
-            model = GaussianMixture(n_components = cluster,
-                                    covariance_type ='full',
-                                    tol = threshold,
-                                    max_iter = gmm_iter).fit(sample_data)
+        ).fit(sample_data)
 
 
         if methode == 'BIC':
 
-            if weight:
+        #    if weight:
 
-                N_k = cluster-1.+cluster*dim_ax3+(cluster*dim_ax3*(dim_ax3-1.))/2.
-                cluster_info_criterion = N_k*np.log(len(sample_data))-2.*np.sum(model.log_probability(sample_data))
-                print('cluster = '+str(cluster)+' ---> BIC = '+str(cluster_info_criterion))
+        #        N_k = cluster-1.+cluster*dim_ax3+(cluster*dim_ax3*(dim_ax3-1.))/2.
+        #        cluster_info_criterion = N_k*np.log(len(sample_data))-2.*np.sum(model.log_probability(sample_data))
+        #        print('cluster = '+str(cluster)+' ---> BIC = '+str(cluster_info_criterion))
 
-            else:
+        #    else:
 
-                cluster_info_criterion = model.bic(sample_data)
-                print('cluster = '+str(cluster)+' ---> BIC = '+str(cluster_info_criterion))
+            cluster_info_criterion = model.bic(sample_data)
+            print('cluster = '+str(cluster)+' ---> BIC = '+str(cluster_info_criterion))
 
         elif methode == 'AIC':
 
@@ -254,7 +258,7 @@ def duplicates(lst, item):
 
 def spectra_clustering(cube,
                        n_com,
-                       weight = None,
+                     #  weight = None,
                        gmm_iter = 1000,
                        threshold = 1e-3,
                        reduce_dim = 'original',
@@ -285,9 +289,9 @@ def spectra_clustering(cube,
     flat_index_masked = index_map.reshape(2, dim_ax2*dim_ax1).transpose()
     flat_data_masked = cube[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
 
-    if weight:
-        flat_weight_masked = weight[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
-        flat_weight = flat_weight_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
+#    if weight:
+#        flat_weight_masked = weight[0].data.reshape(dim_ax3, dim_ax2*dim_ax1).transpose()
+#        flat_weight = flat_weight_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
 
     # Consider only the points that are not masked
     flat_index = flat_index_masked[~np.isnan(np.sum(flat_data_masked, axis=1))]
@@ -303,8 +307,8 @@ def spectra_clustering(cube,
 
         flat_data = flat_data[:, rms_of_dim>rms_threshold]
 
-        if weight:
-            flat_weight = flat_weight[:, rms_of_dim>rms_threshold]
+    #    if weight:
+    #        flat_weight = flat_weight[:, rms_of_dim>rms_threshold]
 
         print('Feature space is reduced from '+str(dim_ax3)+' to '+str(np.shape(flat_data)[1])+' dimensions')
 
@@ -405,34 +409,38 @@ def spectra_clustering(cube,
 
         reduced_data = normed_flat_data
 
-    if weight:
+#    if weight:
+#
+#        #Make the GMM model using pomegranate
+#        model = pomegranate.gmm.GeneralMixtureModel.from_samples(
+#            pomegranate.MultivariateGaussianDistribution,   #Either single function, or list of functions
+#            n_components=n_com,     #Required if single function passed as first arg
+#            X = reduced_data,     #data format: each row is a point-coordinate, each column is a dimension
+#            init = 'first-k',
+#            stop_threshold = 0.001,  #Lower this value to get better fit but take longer.
+#            max_iterations = gmm_iter
+#            )
+#
+#        #Force the model to train again, using additional fitting parameters
+#        model.fit(
+#            X=reduced_data,         #data format: each row is a coordinate, each column is a dimension
+#            weights = flat_weight,  #List of weights. One for each point-coordinate
+#            stop_threshold = 0.001,  #Lower this value to get better fit but take longer.
+#            max_iterations = gmm_iter
+#                            #   (sklearn likes better/slower fits than pomegrante by default)
+#            )
 
-        #Make the GMM model using pomegranate
-        model = pomegranate.gmm.GeneralMixtureModel.from_samples(
-            pomegranate.MultivariateGaussianDistribution,   #Either single function, or list of functions
-            n_components=n_com,     #Required if single function passed as first arg
-            X = reduced_data,     #data format: each row is a point-coordinate, each column is a dimension
-            init = 'first-k',
-            stop_threshold = 0.001,  #Lower this value to get better fit but take longer.
-            max_iterations = gmm_iter
-            )
+#    else:
 
-        #Force the model to train again, using additional fitting parameters
-        model.fit(
-            X=reduced_data,         #data format: each row is a coordinate, each column is a dimension
-            weights = flat_weight,  #List of weights. One for each point-coordinate
-            stop_threshold = 0.001,  #Lower this value to get better fit but take longer.
-            max_iterations = gmm_iter
-                            #   (sklearn likes better/slower fits than pomegrante by default)
-            )
+    model = GaussianMixture(
 
-    else:
+        n_components = n_com,
+        covariance_type = 'full',
+        random_state = 42,
+        tol = threshold,
+        max_iter = gmm_iter
 
-        model = GaussianMixture(n_components = n_com,
-                                covariance_type = 'full',
-                                random_state = 42,
-                                tol = threshold,
-                                max_iter = gmm_iter).fit(reduced_data)
+    ).fit(reduced_data)
 
 
     labels = model.predict(reduced_data)
