@@ -608,8 +608,8 @@ def two_layer(
 
             forg_tau +=  tau
 
-        bakg_term = brightness_temperatur(temp_ex, line)*(1. - np.exp(-bakg_tau))
-        forg_term = brightness_temperatur(temp_ex, line)*(1.-np.exp(-forg_tau))
+        bakg_term = brightness_temperatur(temp_ex[0], line)*(1. - np.exp(-bakg_tau))
+        forg_term = brightness_temperatur(temp_ex[1], line)*(1. - np.exp(-forg_tau))
 
         return (forg_term + bakg_term * np.exp(-forg_tau))
 
