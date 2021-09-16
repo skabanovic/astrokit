@@ -627,7 +627,7 @@ def two_layer(
                 tau = optical_depth(vel,
                                     vel_0,
                                     width,
-                                    temp_ex[0],
+                                    temp_ex,
                                     colden,
                                     abundace_ratio = abundace_ratio,
                                     profile = profile,
