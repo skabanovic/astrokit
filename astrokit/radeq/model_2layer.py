@@ -507,6 +507,7 @@ def two_layer(
 
     bakg_num,
     forg_num,
+    temp_ex,
     vel,
     *param,
     profile,
@@ -517,22 +518,19 @@ def two_layer(
 
 ):
 
-    forg_sum = np.zeros_like(vel)
-    bakg_sum = np.zeros_like(vel)
+    bakg_tau = np.zeros_like(vel)
     forg_tau = np.zeros_like(vel)
-
 
     if (forg_num > 0):
 
-        for i in range(0, (4*bakg_num), 4):
+        for i in range(0, (3*bakg_num), 3):
 
-            temp_ex  = param[i]
-            vel_0    = param[i+2]
-            width    = param[i+3]
+            vel_0    = param[i+1]
+            width    = param[i+2]
 
             if input_colden:
 
-                colden = param[i+1]
+                colden = param[i]
 
                 tau = optical_depth(
 
@@ -550,7 +548,7 @@ def two_layer(
 
             else:
 
-                tau_0    = param[i+1]
+                tau_0    = param[i]
 
                 tau = line_profile(
 
@@ -565,18 +563,16 @@ def two_layer(
                     norm = False
 
                 )
+            bakg_tau +=  tau
 
-            bakg_sum += brightness_temperatur(temp_ex, line)*(1. - np.exp(-tau))
+        for i in range((3*bakg_num), (3*bakg_num+3*forg_num), 3):
 
-        for i in range((4*bakg_num), (4*bakg_num+4*forg_num), 4):
-
-            temp_ex  = param[i]
-            vel_0    = param[i+2]
-            width    = param[i+3]
+            vel_0    = param[i+1]
+            width    = param[i+2]
 
             if input_colden:
 
-                colden = param[i+1]
+                colden = param[i]
 
                 tau = optical_depth(
 
@@ -594,7 +590,7 @@ def two_layer(
 
             else:
 
-                tau_0    = param[i+1]
+                tau_0    = param[i]
 
                 tau = line_profile(
 
@@ -612,21 +608,21 @@ def two_layer(
 
             forg_tau +=  tau
 
-            forg_sum += brightness_temperatur(temp_ex, line)*(1.-np.exp(-tau))
+        bakg_term = brightness_temperatur(temp_ex, line)*(1. - np.exp(-bakg_tau))
+        forg_term = brightness_temperatur(temp_ex, line)*(1.-np.exp(-forg_tau))
 
-        return (forg_sum + bakg_sum * np.exp(-forg_tau))
+        return (forg_term + bakg_term * np.exp(-forg_tau))
 
     else:
 
-        for i in range(0, (4*bakg_num), 4):
+        for i in range(0, (3*bakg_num), 3):
 
-            temp_ex  = param[i]
-            vel_0    = param[i+2]
-            width    = param[i+3]
+            vel_0    = param[i+1]
+            width    = param[i+2]
 
             if input_colden:
 
-                colden = param[i+1]
+                colden = param[i]
 
                 tau = optical_depth(vel,
                                     vel_0,
@@ -640,7 +636,7 @@ def two_layer(
 
             else:
 
-                tau_0    = param[i+1]
+                tau_0    = param[i]
 
                 tau = line_profile(vel,
                                    tau_0,
@@ -652,13 +648,11 @@ def two_layer(
                                    iso_shift,
                                    norm = False)
 
-            #print('Tex: ' + str(temp_ex) )
-            #print('line: ' + line)
-            #print('tau: ' + str(tau) )
+            bakg_tau +=  tau
 
-            bakg_sum += brightness_temperatur(temp_ex, line)*(1. - np.exp(-tau))
+        bakg_term = brightness_temperatur(temp_ex, line)*(1. - np.exp(-bakg_tau))
 
-        return bakg_sum
+        return bakg_term
 
 def temp_mb_error(
 
