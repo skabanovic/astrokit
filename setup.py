@@ -21,6 +21,7 @@ setup(
                       'scikit-learn',
                       'joblib',
                       'reproject',
+                      'IPython',
                       #'pomegranate',
                       'cygrid'],
     # scripts=[

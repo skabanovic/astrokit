@@ -484,6 +484,7 @@ def cluster_average_spectra(
     cluster_num = int(np.nanmax(cluster_map[0].data)) +1
     len_ax3 = cube[0].header['NAXIS3']
     cluster_spect = np.zeros([cluster_num, len_ax3])
+    cluster_std = np.zeros([cluster_num, len_ax3])
 
 
     for cluster in range(cluster_num):
@@ -501,7 +502,7 @@ def cluster_average_spectra(
 
             cluster_spect[cluster, :] = np.average(cube[0].data[:, cluster_map[0].data == cluster], axis = 1)
 
-        cluster_std = np.std(cube[0].data[:, cluster_map[0].data == cluster], axis = 1)
+        cluster_std[cluster, :] = np.std(cube[0].data[:, cluster_map[0].data == cluster], axis = 1)
 
 
     return cluster_spect, cluster_std
@@ -774,7 +775,7 @@ def cluster_size(domain_map,
 
     pix_size = Angle(res_ra*u.deg).rad * Angle(res_dec*u.deg).rad
 
-    num_cluster = int(np.max(domain_map[0].data)+1)
+    num_cluster = int(np.nanmax(domain_map[0].data)+1)
 
     cluster_size = np.zeros(num_cluster)
     cluster_size_err = np.zeros(num_cluster)

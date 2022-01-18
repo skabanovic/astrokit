@@ -61,7 +61,8 @@ def black_body(
 def specific_dust_opacity(
 
     wave,
-    beta,
+    beta = 2.,
+    kappa_0 = 0.1,
     unit = 'frequency',
     system_of_units = 'cgs',
 ):
@@ -70,11 +71,11 @@ def specific_dust_opacity(
 
         if unit == 'frequency':
 
-            kappa = 0.1 *(wave/1e12)**beta
+            kappa = kappa_0 *(wave/1e12)**beta
 
         elif unit == 'wavelength':
 
-            kappa = 0.1 *(3e-4/wave)**beta
+            kappa = kappa_0 *(3e-4/wave)**beta
 
         else:
 
@@ -89,26 +90,34 @@ def gray_body(
     wave,
     temp,
     colden,
+    beta = 2.,
+    kappa_0 = 0.1,
     unit='frequency',
     system_of_units = 'cgs',
-    version = 'Hildebrand+1983'
+    version = 'Hildebrand+1983',
+    colden_scale = 'log10',
+    aver_mol_wei = 2.33
 
 ):
 
     if version == 'Hildebrand+1983':
 
-        beta = 2.
+        hydrogen_mass = aver_mol_wei*const.m_p.cgs.value
 
-        intensity = colden \
-            *  specific_dust_opacity(
+        if colden_scale == 'log10':
+            colden_transform = 10**colden
+        else:
+            colden_transform = colden
 
+        intensity = colden_transform*hydrogen_mass \
+            *specific_dust_opacity(
                 wave,
                 beta,
+                kappa_0,
                 unit,
                 system_of_units
-            ) \
+            )\
             *black_body(
-
                 wave,
                 temp,
                 unit,
@@ -125,11 +134,14 @@ def galactic_carbon_ratio(dist, dist_err):
 
     carbon_ratio = ratio_const1 * dist * 1e-3 + ratio_const2
 
+    ratio_const1_err = 1.0
+
     ratio_const2_err = 7.37
 
-    carbon_ratio_err = np.sqrt((dist * 1e-3)**2 \
+    carbon_ratio_err = np.sqrt((dist * 1e-3 * ratio_const1_err)**2 \
                                + ratio_const1**2*(dist_err * 1e-3)**2\
                                + ratio_const2_err**2)
+
     return carbon_ratio, carbon_ratio_err
 
 def tau_ratio_eq(tau, iso_ratio, ratio_norm, obs_ratio):
@@ -199,7 +211,7 @@ def optical_depth_ratio(iso_ratio,
 def tau_spect(spect_main,
               spect_iso,
               vel_main,
-              vel_iso = [],
+              vel_iso = None,
               rms_main = 0,
               rms_iso = 0,
               shift_iso = 0.,
@@ -211,6 +223,9 @@ def tau_spect(spect_main,
               vel_interp = None,
               use_axis = 'main',
               tau_max = 30):
+
+    if vel_iso is None:
+        vel_iso = []
 
 
     if len(vel_iso) == 0:
@@ -782,8 +797,11 @@ def excitation_temperatur(
     temp_mb,
     tau = 0.,
     temp_continuum = 0.,
+    temp_mb_err = 0,
+    tau_err = 0,
     line = 'cii',
     optically_thick = True,
+    calc_error = False,
     ):
 
     if line=='cii':
@@ -808,7 +826,19 @@ def excitation_temperatur(
 
         temp_ex = temp_0/np.log(temp_0/(temp_mb+temp_continuum) * (1.-np.exp(-tau)) +1.)
 
-    return temp_ex
+    if calc_error:
+
+        term_tau = -temp_0**2*np.exp(-tau)/temp_mb/(temp_0/temp_mb*(1.-np.exp(-tau))+1.)/np.log(temp_0/temp_mb*(1.-np.exp(-tau))+1.)**2
+
+        term_temp = temp_0**2 *(1.-np.exp(-tau))/temp_mb**2/(temp_0/temp_mb*(1.-np.exp(-tau))+1.)/np.log(temp_0/temp_mb*(1.-np.exp(-tau))+1.)**2
+
+        temp_ex_err = np.sqrt((term_tau*tau_err)**2+(term_temp*temp_mb_err)**2)
+
+        return temp_ex, temp_ex_err
+
+    else:
+
+        return temp_ex
 
 def jansky_to_kelvin(
 
@@ -844,7 +874,7 @@ def column_density_hisa(
     tau_hisa,
     vel_hisa, # in km/s
     temp_spin, # in K
-    channel_width = 1., # in km/s
+    channel_width = None, # in km/s
     methode = 'integral'
 ):
 
@@ -853,6 +883,10 @@ def column_density_hisa(
         inten =  np.trapz(tau_hisa, vel_hisa)
 
     elif methode == 'channel':
+
+        if channel_width is None:
+
+            channel_width = abs(vel_hisa[1] - vel_hisa[0])
 
         inten = tau_hisa*channel_width
 
@@ -882,9 +916,11 @@ def SED_fit(
     guess,
     bound_min,
     bound_max,
-    weight,
+    sigma = None,
     maxfev = 100,
-    aver_mol_wei = 2.33
+    aver_mol_wei = 2.33,
+    beta = 2.,
+    kappa_0 = 0.1,
 
 ):
 
@@ -907,24 +943,25 @@ def SED_fit(
                     wave,
                     temp,
                     colden,
+                    beta,
+                    kappa_0,
                     unit='frequency',
                     system_of_units = 'cgs',
+                    colden_scale = 'log10',
                     version = 'Hildebrand+1983'
 
                 ),
 
                 frequency,
                 dust_intensity,
-                sigma = weight,
+                sigma = sigma,
                 p0 = guess,
                 bounds = (bound_min, bound_max),
                 maxfev = maxfev
             )
 
             temp_dust = popt[0]
-
-            colden_dust = popt[1]/hydrogen_mass
-
+            colden_dust = 10**popt[1]#/hydrogen_mass
 
     except RuntimeError:
 
@@ -938,25 +975,45 @@ def SED_fit(
 def SED_map(
 
     input_maps,
-    frequency = [],
-    wavelength = [],
+    frequency = None,
+    wavelength = None,
     guess = [10, 1e21],
     bound_min = [2.7, 0.0],
     bound_max = [100, 1e24],
-    weight = [],
+    sigma = None,
     num_cores = 1,
     maxfev = 100,
     input_map_unit = 'MJy/sr',
-    aver_mol_wei = 2.33
+    aver_mol_wei = 2.33,
+    beta = 2.,
+    kappa_0 = 0.1,
 ):
 
+    if frequency is None:
+        frequency = []
 
-    hydrogen_mass = aver_mol_wei*const.m_p.cgs.value
+    if wavelength is None:
+        wavelength = []
 
-    guess[1] = guess[1]*hydrogen_mass
-    bound_min[1] = bound_min[1]*hydrogen_mass
-    bound_max[1] = bound_max[1]*hydrogen_mass
+    if sigma is None:
+        sigma = []
 
+    #hydrogen_mass = aver_mol_wei*const.m_p.cgs.value
+
+    if guess[1] == 0:
+        guess[1] = 0
+    else:
+        guess[1] = np.log10(guess[1])#*hydrogen_mass
+
+    if bound_min[1] == 0:
+        bound_min[1] = 0
+    else:
+        bound_min[1] = np.log10(bound_min[1])#*hydrogen_mass
+
+    if bound_max[1] == 0:
+        bound_max[1] = 0
+    else:
+        bound_max[1] = np.log10(bound_max[1])#*hydrogen_mass
 
     if input_map_unit == 'MJy/sr':
 
@@ -980,15 +1037,15 @@ def SED_map(
     temp_dust_map = astrokit.zeros_map(input_maps[-1])
 
 
-    if len(weight) == 0:
+    if len(sigma) > 0:
 
-        weight = np.zeros(len(frequency))
-
-        weight[:] = unit_to_cgs
+        sigma = sigma*unit_to_cgs
 
     else:
 
-        weight = weight*unit_to_cgs
+        sigma = np.zeros(len(frequency))
+
+        sigma[:] = unit_to_cgs
 
 
     len_ra = colden_dust_map[0].header['NAXIS1']
@@ -1007,7 +1064,7 @@ def SED_map(
 
     dust_intensity_list = dust_intensity_cube.reshape(len(frequency), len_dec*len_ra).transpose()
 
-    output_list  = Parallel(n_jobs=num_cores)(delayed(SED_fit)(dust_intensity, frequency, guess, bound_min, bound_max, weight, maxfev = maxfev, aver_mol_wei = aver_mol_wei) for dust_intensity in dust_intensity_list)
+    output_list  = Parallel(n_jobs=num_cores)(delayed(SED_fit)(dust_intensity, frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = beta, kappa_0 = kappa_0) for dust_intensity in dust_intensity_list)
 
     temp_dust_list = np.zeros(len_dec*len_ra)
     colden_dust_list = np.zeros(len_dec*len_ra)
@@ -1028,10 +1085,16 @@ def dust_flux_ratio(
     temp,
     observed_ratio,
     beta,
-    frequency = [],
-    wavelength = [],
+    frequency = None,
+    wavelength = None,
 
 ):
+
+    if frequency is None:
+        frequency = []
+
+    if wavelength is None:
+        wavelength = []
 
     if len(frequency) == 0:
 
@@ -1062,9 +1125,7 @@ def dust_flux_ratio(
 
     )
 
-
     flux_ratio = flux[0]/flux[1]*(wavelength[1]/wavelength[0])**beta
-
 
     return observed_ratio - flux_ratio
 
@@ -1072,14 +1133,26 @@ def dust_flux_ratio(
 def dust_colden_map(
 
     input_maps,
-    frequency = [],
-    wavelength = [],
-    temp_range = [],
+    frequency = None,
+    wavelength = None,
+    temp_range = None,
     beta = 2,
+    kappa_0 = 0.1,
     method = 'bisection',
     input_map_unit = 'MJy/sr',
-    average_molecular_weight = 2.33
+    aver_mol_wei = 2.33
 ):
+
+    if frequency is None:
+        frequency = []
+
+    if wavelength is None:
+        wavelength = []
+
+    if temp_range is None:
+        temp_range = []
+
+
 
     if input_map_unit == 'MJy/sr':
 
@@ -1168,16 +1241,16 @@ def dust_colden_map(
                 temp_dust_map[0].data[dec, ra] = temp_range[0]
 
                 colden_dust_map[0].data[dec, ra] = observed_flux[1] \
-                                                 / astrokit.specific_dust_opacity(frequency[1], beta, unit = 'frequency', system_of_units = 'cgs') \
+                                                 / astrokit.specific_dust_opacity(frequency[1], beta, kappa_0, unit = 'frequency', system_of_units = 'cgs') \
                                                  /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], unit='frequency', system_of_units = 'cgs') \
-                                                 /  const.m_p.cgs.value / average_molecular_weight
+                                                 /  const.m_p.cgs.value / aver_mol_wei
 
             else :
 
                 colden_dust_map[0].data[dec, ra] = observed_flux[1] \
-                                                 / astrokit.specific_dust_opacity(frequency[1], beta, unit = 'frequency', system_of_units = 'cgs') \
+                                                 / astrokit.specific_dust_opacity(frequency[1], beta, kappa_0, unit = 'frequency', system_of_units = 'cgs') \
                                                  /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], unit='frequency', system_of_units = 'cgs') \
-                                                 /  const.m_p.cgs.value / average_molecular_weight
+                                                 /  const.m_p.cgs.value / aver_mol_wei
 
 
     return temp_dust_map, colden_dust_map

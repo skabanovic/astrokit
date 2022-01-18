@@ -1,9 +1,9 @@
 from astropy.coordinates import SkyCoord
 from astroquery.simbad import Simbad
 
-from astropy.modeling.models import BlackBody1D
-from astropy.modeling.blackbody import FLAM
-from astropy.modeling.blackbody import FNU
+#from astropy.modeling.models import BlackBody1D
+#from astropy.modeling.blackbody import FLAM
+#from astropy.modeling.blackbody import FNU
 import astropy.units as u
 
 from astropy.coordinates import Angle

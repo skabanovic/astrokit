@@ -487,7 +487,7 @@ def chop_cube(vel_min, vel_max, hdul_inp):
     hdul_chop[0].header["NAXIS3"] = axis_len
     hdul_chop[0].header["CRVAL3"] = ref_value
 
-    hdul_chop[0].data=hdul_inp[0].data[idx_min:idx_max,:,:]
+    hdul_chop[0].data = copy.deepcopy(hdul_inp[0].data[idx_min:idx_max,:,:])
 
     return hdul_chop
 
@@ -536,7 +536,14 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
 
         # determine the rms of the noise
         #rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)))
-        rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)- np.sum(num_of_zeros)))
+
+        if int(len(spect_noise)) == int(np.sum(num_of_zeros)):
+            
+            rms_noise = np.nan
+
+        else:
+
+            rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)- np.sum(num_of_zeros)))
 
     elif range:
 
@@ -700,6 +707,7 @@ def noise_intensity_map(vel_min, vel_max, hdul):
 
 def average_cube(hdul_inp, weight = None):
 
+
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
     spect_aver = fits.HDUList([hdu])
@@ -763,6 +771,8 @@ def average_cube(hdul_inp, weight = None):
                     spect_aver[0].data[:] += hdul_inp[0].data[:, idx1, idx2]
 
         spect_aver[0].data = spect_aver[0].data/spect_count
+
+        #print(spect_count)
 
 
     return spect_aver
@@ -1048,43 +1058,59 @@ def find_wing(vel, spect, idx_peak, rms = 0, wing_hight_rel = 5, wing_hight_rms 
 
 
 
-def pi_diagram(path, hdul, radius = None):
+def pi_diagram(
+
+    path,
+    hdul,
+    radius = None
+
+):
 
     intens = np.zeros_like(path[0,:])
 
     if radius:
 
-        radius = Angle(radius*u.arcsec)
+        radius = radius/3600
 
     else:
 
-        radius = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)*u.deg)
+        radius = (hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.
 
 
     grid2d_ax1, grid2d_ax2 = get_grid(hdul)
 
+    diameter = 2.*radius
+
     for pos in range(len(intens)):
 
         # determie the distance from the line points to every grid point
-        grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+( (grid2d_ax1-path[0, pos])*np.cos(path[1, pos]*np.pi/180.) )**2)
+        grid2d_r = np.sqrt((grid2d_ax2 - path[1, pos])**2 + ((grid2d_ax1 - path[0, pos]) * np.cos(path[1, pos]*np.pi/180.))**2)
 
         # define relativ radius (3*sigma)
-        sig3_r= 3.*radius.deg
+        sig3_r= 3.*diameter/2./np.sqrt(2.*np.log(2.))
 
         # find relavant coordinat values
         grid2d_sig3 = grid2d_r[np.where( grid2d_r < sig3_r )]
-        bool_sig3 = np.isin(grid2d_r, grid2d_sig3)
-        idx_sig3 = np.asarray(np.where(bool_sig3))
+        bool_sig3   = np.isin(grid2d_r, grid2d_sig3)
+        idx_sig3    = np.asarray(np.where(bool_sig3))
 
         weight_sum = 0.
+
         for idx_beam in range(len(idx_sig3[0,:])):
 
-            weight = curve.gauss_2d(radius.deg, path[0, pos], path[1, pos], \
-                           grid2d_ax1[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]], \
-                           grid2d_ax2[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]])
-            intens[pos] = intens[pos]+\
-            hdul[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]*weight
-            weight_sum=weight_sum+weight
+            weight = curve.gauss_2d(
+                diameter,
+                path[0, pos],
+                path[1, pos],
+                grid2d_ax1[idx_sig3[0,idx_beam],
+                idx_sig3[1,idx_beam]],
+                grid2d_ax2[idx_sig3[0,idx_beam],
+                idx_sig3[1,idx_beam]]
+            )
+
+            intens[pos] = intens[pos] + hdul[0].data[idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]] * weight
+
+            weight_sum = weight_sum + weight
 
         intens[pos]=intens[pos]/weight_sum
 

@@ -17,6 +17,8 @@ import matplotlib
 
 from astropy import constants as const
 
+from IPython.display import clear_output
+
 def line_profile(vel = None,
                  amp = None,
                  vel_0 = None,
@@ -393,8 +395,6 @@ def column_density(vel_0,
 
         colden = tau_0/amp
 
-
-
     else:
 
         colden = tau_0/line_profile(vel_0,
@@ -606,7 +606,7 @@ def two_layer(
 
                 )
 
-            forg_tau +=  tau
+            forg_tau += tau
 
         bakg_term = brightness_temperatur(temp_ex[0], line)*(1. - np.exp(-bakg_tau))
         forg_term = brightness_temperatur(temp_ex[1], line)*(1. - np.exp(-forg_tau))
@@ -648,7 +648,7 @@ def two_layer(
                                    iso_shift,
                                    norm = False)
 
-            bakg_tau +=  tau
+            bakg_tau += tau
 
         bakg_term = brightness_temperatur(temp_ex, line)*(1. - np.exp(-bakg_tau))
 
@@ -690,6 +690,7 @@ def plot_2layer_model(
     fit_param,
     bakg_num,
     forg_num,
+    temp_ex,
     abundace_ratio,
     profile = 'gauss',
     line = '12co(3-2)',
@@ -699,6 +700,7 @@ def plot_2layer_model(
     res_plot = 0.01,
     title = 'Model Fit',
     fontsize = 24,
+    labelsize = 24,
     save_image = False,
     image_path = './',
     image_name = 'plot_2layer_model'
@@ -715,6 +717,7 @@ def plot_2layer_model(
     temp_fit = astrokit.two_layer(
         bakg_num,
         forg_num,
+        temp_ex,
         vel,
         *fit_param,
         profile = profile,
@@ -727,6 +730,7 @@ def plot_2layer_model(
     temp_plot = astrokit.two_layer(
         bakg_num,
         forg_num,
+        temp_ex,
         vel_plot,
         *fit_param,
         profile = profile,
@@ -741,7 +745,7 @@ def plot_2layer_model(
     residual = spect-temp_fit
 
     # determine chi squared of the fit
-    chisq_fit = sum((residual/rms) ** 2)/(len(residual)-(4*bakg_num+4*forg_num))
+    chisq_fit = sum((residual/rms) ** 2)/(len(residual)-(3*bakg_num+3*forg_num))
 
     print('chi squared=', chisq_fit)
 
@@ -759,24 +763,23 @@ def plot_2layer_model(
     bakg_temp_sum = np.zeros([len(vel_plot)])
     idx_num       = 0
 
-    for idx in range(0,(4*bakg_num), 4):
+    for idx in range(0,(3*bakg_num), 3):
 
         # load paramter
-        temp_ex = fit_param[idx]
-        vel_0   = fit_param[idx+2]
-        width   = fit_param[idx+3]
+        vel_0   = fit_param[idx+1]
+        width   = fit_param[idx+2]
 
         # determine the optical depth of the background component per velocity chanel
 
         if input_colden:
 
-            colden = fit_param[idx+1]
+            colden = fit_param[idx]
 
             bakg_tau[idx_num,:] = astrokit.optical_depth(
                 vel_plot,
                 vel_0,
                 width,
-                temp_ex,
+                temp_ex[0],
                 colden,
                 abundace_ratio = abundace_ratio,
                 profile = profile,
@@ -787,8 +790,8 @@ def plot_2layer_model(
             bakg_temp[idx_num,:] = astrokit.two_layer(
                 1,
                 0,
+                temp_ex[0],
                 vel_plot,
-                temp_ex,
                 colden,
                 vel_0,
                 width,
@@ -801,7 +804,7 @@ def plot_2layer_model(
 
         else:
 
-            tau_0 = fit_param[idx+1]
+            tau_0 = fit_param[idx]
 
             bakg_tau[idx_num,:] = astrokit.line_profile(
                 vel_plot,
@@ -818,8 +821,8 @@ def plot_2layer_model(
             bakg_temp[idx_num,:] = astrokit.two_layer(
                 1,
                 0,
+                temp_ex[0],
                 vel_plot,
-                temp_ex,
                 tau_0,
                 vel_0,
                 width,
@@ -831,12 +834,24 @@ def plot_2layer_model(
                 )
 
         # determine the total background temperatur per velocity chanel
-        bakg_temp_sum += bakg_temp[idx_num,:]
+        #bakg_temp_sum += bakg_temp[idx_num,:]
         bakg_tau_sum  += bakg_tau[idx_num,:]
 
         # go to the next background component
         idx_num += 1
 
+    bakg_temp_sum = astrokit.two_layer(
+        bakg_num,
+        0,
+        temp_ex[0],
+        vel_plot,
+        *fit_param[:bakg_num*3],
+        profile = profile,
+        line = line,
+        iso_shift = iso_shift,
+        abundace_ratio = abundace_ratio,
+        input_colden = input_colden
+        )
     # determine the single foreground layers
 
     forg_tau      = np.zeros([forg_num,len(vel_plot)])
@@ -845,22 +860,21 @@ def plot_2layer_model(
     forg_temp_sum = np.zeros([len(vel_plot)])
     idx_num       = 0
 
-    for idx in range((4*bakg_num),(4*bakg_num+4*forg_num), 4):
+    for idx in range((3*bakg_num),(3*bakg_num+3*forg_num), 3):
 
-        temp_ex = fit_param[idx]
-        vel_0   = fit_param[idx+2]
-        width   = fit_param[idx+3]
+        vel_0   = fit_param[idx+1]
+        width   = fit_param[idx+2]
 
 
         if input_colden:
 
-            colden = fit_param[idx+1]
+            colden = fit_param[idx]
 
             forg_tau[idx_num,:] = astrokit.optical_depth(
                 vel_plot,
                 vel_0,
                 width,
-                temp_ex,
+                temp_ex[1],
                 colden,
                 abundace_ratio = abundace_ratio,
                 profile = profile,
@@ -871,8 +885,8 @@ def plot_2layer_model(
             forg_temp[idx_num,:] = astrokit.two_layer(
                 1,
                 0,
+                temp_ex[1],
                 vel_plot,
-                temp_ex,
                 colden,
                 vel_0,
                 width,
@@ -885,7 +899,7 @@ def plot_2layer_model(
 
         else:
 
-            tau_0 = fit_param[idx+1]
+            tau_0 = fit_param[idx]
 
             # determine the optical depth of the foreground component per velocity chanel
             forg_tau[idx_num,:] = astrokit.line_profile(
@@ -904,8 +918,8 @@ def plot_2layer_model(
             forg_temp[idx_num,:] = astrokit.two_layer(
                 1,
                 0,
+                temp_ex[1],
                 vel_plot,
-                temp_ex,
                 tau_0,
                 vel_0,
                 width,
@@ -916,11 +930,24 @@ def plot_2layer_model(
                 )
 
         # determine the total foreground temperatur per velocity chanel
-        forg_temp_sum += forg_temp[idx_num,:]
+        #forg_temp_sum += forg_temp[idx_num,:]
         forg_tau_sum  += forg_tau[idx_num,:]
 
         # go to the next foreground component
         idx_num += 1
+
+    forg_temp_sum = astrokit.two_layer(
+        forg_num,
+        0,
+        temp_ex[1],
+        vel_plot,
+        *fit_param[bakg_num*3:],
+        profile = profile,
+        line = line,
+        iso_shift = iso_shift,
+        abundace_ratio = abundace_ratio,
+        input_colden = input_colden
+        )
 
     vmin = vel_range[0]
     vmax = vel_range[1]
@@ -940,13 +967,13 @@ def plot_2layer_model(
     plt.subplot2grid((3, 3), (0, 0), rowspan=2)
     plt.plot(vel, spect, color='C3', linewidth=2, label="Observed Data")
     plt.plot(vel_plot, temp_plot, color='C2', linewidth=2, label="Model Fit")
-    plt.legend(prop={'size': fontsize}, loc='upper right')
+    plt.legend(prop={'size': labelsize}, loc='upper right')
     plt.xlim(vmin, vmax)
     plt.ylim(tmin, tmax)
     plt.xticks([])
     plt.yticks(size=fontsize)
     plt.ylabel('$\mathrm{T_{mB}}$ [K]', size=fontsize)
-    plt.title(title, size=fontsize)
+    plt.title(title, size=fontsize, fontweight="bold")
 
     #tmax = 10.*rms_arr[0]
     #tmin = -10.*rms_arr[0]
@@ -967,7 +994,7 @@ def plot_2layer_model(
     rms_plot = np.zeros_like(rms)
     rms_plot[:] = 3.*np.max(rms)
     plt.plot(vel, rms_plot, color='C1', linewidth=2, label="$3\,\sigma$")
-    plt.legend(prop={'size': fontsize}, loc='upper right')
+    plt.legend(prop={'size': labelsize}, loc='upper right')
     plt.plot(vel, -rms_plot, color='C1', linewidth=2)
     plt.ylabel('Residual', size = fontsize)
     plt.xlabel('Velocity [km/s]', size = fontsize)
@@ -1005,7 +1032,7 @@ def plot_2layer_model(
     plt.xlim(vmin, vmax)
     plt.ylim(tmin, tmax)
 
-    plt.legend(prop={'size': fontsize}, loc='upper right')
+    plt.legend(prop={'size': labelsize}, loc='upper right')
     plt.ylabel('$\mathrm{T_{mB}}$ [K]',size=fontsize, color = 'C0')
     plt.tick_params(axis='y', labelcolor='C0')
     plt.xticks([])
@@ -1057,7 +1084,7 @@ def plot_2layer_model(
     plt.xlim(vmin,vmax)
     plt.yticks(size=fontsize)
     plt.xticks(size=fontsize)
-    plt.legend(prop={'size': fontsize}, loc='lower right')
+    plt.legend(prop={'size': labelsize}, loc='lower right')
     plt.tick_params(axis='y', labelcolor='C6')
     plt.ylabel('$\mathrm{T_{mB}}$ [K]',size=fontsize, color = 'C6')
     plt.ylim(tmin, tmax)
@@ -1091,12 +1118,14 @@ def bakg_2layer_cube(
     cube_bound_min,
     cube_bound_max,
     vel_fit,
+    temp_ex_map,
     abundace_ratio,
     rms_threshold = 1.,
     chisq_threshold = 2.,
     chisq_ratio = 0.,
     profile = 'gauss',
-    line = '13co(3-2)'
+    line = '13co(3-2)',
+    temp_ex_method = 'single'
 
 ):
 
@@ -1128,7 +1157,6 @@ def bakg_2layer_cube(
         ref_value_ax3 = 0,
         beam_maj = cube_iso[0].header['BMAJ'],
         beam_min = cube_iso[0].header['BMIN']
-
     )
 
     param_axis = astrokit.get_axis(3, cube_guess)
@@ -1143,7 +1171,18 @@ def bakg_2layer_cube(
         ref_value_ax3 = 0,
         beam_maj = cube_iso[0].header['BMAJ'],
         beam_min = cube_iso[0].header['BMIN']
+    )
 
+    fit_err = astrokit.empty_grid(
+
+        grid_ax1 = axis_ra,
+        grid_ax2 = axis_dec,
+        grid_ax3 = param_axis,
+        ref_value_ax1 = cube_iso[0].header['CRVAL1'],
+        ref_value_ax2 = cube_iso[0].header['CRVAL2'],
+        ref_value_ax3 = 0,
+        beam_maj = cube_iso[0].header['BMAJ'],
+        beam_min = cube_iso[0].header['BMIN']
     )
 
     axis = 3
@@ -1163,83 +1202,131 @@ def bakg_2layer_cube(
     failed_pix = astrokit.zeros_map(cube_iso)
 
     for dec in range(naxis2):
-        print('Progress: '+str(round((dec*100/naxis2), 1)) +' %')
+        clear_output(wait=True)
+        print('Progress: ' + '#'* int((dec/naxis2)*30+1) + ' '+ str(round((dec/(naxis2-1))*100, 1))+'%')
+        #print('Progress: '+str(round((dec*100/naxis2), 1)) +' %')
         for ra in range(naxis1):
 
-             if (np.max(cube_iso[0].data[:, dec, ra]) > (rms_threshold*map_rms[0].data[dec, ra])):
+            if temp_ex_method == 'single':
 
-                    comp_num = 1
+                temp_ex = temp_ex_map
 
-                    continue_loop = True
+            else:
 
-                    first_try = 0
+                temp_ex = temp_ex_map[0].data[dec, ra]
 
-                    while (comp_num < (map_cluster_num_bakg[0].data[dec, ra]+1)) and continue_loop:
+            if (np.max(cube_iso[0].data[:, dec, ra]) > (rms_threshold*map_rms[0].data[dec, ra])):
 
-                        rms_spect[:] = map_rms[0].data[dec, ra]
+                comp_num = 1
 
-                        guess     = np.zeros(4*comp_num)
-                        bound_min = np.zeros(4*comp_num)
-                        bound_max = np.zeros(4*comp_num)
+                continue_loop = True
 
-                        for comp in range(0, len(guess), 4):
-                            for param in range(4):
+                first_try = 0
 
-                                guess[comp + param]     = cube_guess[0].data[comp + param,   dec, ra]
-                                bound_min[comp + param] = cube_bound_min[0].data[comp + param,   dec, ra]
-                                bound_max[comp+ param]  = cube_bound_max[0].data[comp + param,   dec, ra]
+                while (comp_num < (map_cluster_num_bakg[0].data[dec, ra]+1)) and continue_loop:
 
+                    rms_spect[:] = map_rms[0].data[dec, ra]
 
-                        try:
+                    guess     = np.zeros(3*comp_num)
+                    bound_min = np.zeros(3*comp_num)
+                    bound_max = np.zeros(3*comp_num)
 
+                    for comp in range(0, len(guess), 3):
+                        for param in range(3):
 
-                            popt_new, pcov_new = curve_fit(
+                            guess[comp + param]     = cube_guess[0].data[comp + param,   dec, ra]
+                            bound_min[comp + param] = cube_bound_min[0].data[comp + param,   dec, ra]
+                            bound_max[comp+ param]  = cube_bound_max[0].data[comp + param,   dec, ra]
 
-                                lambda vel,
-                                *param: astrokit.two_layer(
+                    try:
 
-                                    comp_num,
-                                    0,
-                                    vel_iso,
-                                    *param,
-                                    profile = profile,
-                                    line = line,
-                                    abundace_ratio = abundace_ratio
+                        popt_new, pcov_new = curve_fit(
 
-                                ),
+                            lambda vel, *param: astrokit.two_layer(
 
+                                comp_num,
+                                0,
+                                temp_ex,
                                 vel_iso,
-                                cube_iso[0].data[:, dec, ra],
-                                sigma = rms_spect,
-                                p0 = guess,
-                                bounds = (bound_min, bound_max),
-                                maxfev = 1000
+                                *param,
+                                profile = profile,
+                                line = line,
+                                abundace_ratio = abundace_ratio
+                            ),
+                            vel_iso,
+                            cube_iso[0].data[:, dec, ra],
+                            sigma = rms_spect,
+                            absolute_sigma = True,
+                            p0 = guess,
+                            bounds = (bound_min, bound_max),
+                            maxfev = 1000
+                        )
 
-                            )
+                        if first_try == 0:
 
-                            if first_try == 0:
+                            comp_old = comp_num
+                            popt_old = popt_new
+                            perr_old = np.sqrt(np.diag(pcov_new))
 
-                                comp_old = comp_num
-                                popt_old = popt_new
-                                first_try = 1
+                            first_try = 1
 
-                                fit_old = astrokit.two_layer(
-
-                                    comp_old,
-                                    0,
-                                    vel_iso,
-                                    *popt_old,
-                                    profile = profile,
-                                    line = line,
-                                    abundace_ratio = abundace_ratio
-
+                            fit_old = astrokit.two_layer(
+                                comp_old,
+                                0,
+                                temp_ex,
+                                vel_iso,
+                                *popt_old,
+                                profile = profile,
+                                line = line,
+                                abundace_ratio = abundace_ratio
                                 )
 
-                                # determine residual fo the fit
-                                residual = cube_iso[0].data[:, dec, ra] - fit_old[:]
+                            # determine residual fo the fit
+                            residual = cube_iso[0].data[:, dec, ra] - fit_old[:]
 
-                                # determine chi squared of the fit
-                                chisq_old = sum((residual/rms_spect) ** 2)/(len(residual)- (4*comp_old))
+                            # determine chi squared of the fit
+                            chisq_old = sum((residual/rms_spect) ** 2)/(len(residual)- (3*comp_old))
+
+                            if (chisq_old < chisq_threshold):
+
+                                continue_loop = False
+
+                            else:
+
+                                comp_num += 1
+
+                        else:
+
+                            comp_new = comp_num
+
+                            fit_new = astrokit.two_layer(
+                                comp_new,
+                                0,
+                                temp_ex,
+                                vel_iso,
+                                *popt_new,
+                                profile = profile,
+                                line = line,
+                                abundace_ratio = abundace_ratio
+                            )
+
+                            # determine residual fo the fit
+                            residual = cube_iso[0].data[:, dec, ra] - fit_new[:]
+
+                            # determine chi squared of the fit
+                            chisq_new = sum((residual/rms_spect) ** 2)/(len(residual) - (3. * comp_new))
+
+                            #print(chisq_new/chisq_old)
+
+                            #print(popt_old)
+                            #print(popt_new)
+
+                            if ((1. - (chisq_new/chisq_old)) > chisq_ratio):
+
+                                comp_old = comp_new
+                                popt_old = popt_new
+                                perr_old = np.sqrt(np.diag(pcov_new))
+                                chisq_old = chisq_new
 
                                 if (chisq_old < chisq_threshold):
 
@@ -1251,101 +1338,65 @@ def bakg_2layer_cube(
 
                             else:
 
-                                comp_new = comp_num
+                                comp_num += 1
 
-                                fit_new = astrokit.two_layer(
+                                #continue_loop = False
 
-                                    comp_new,
-                                    0,
-                                    vel_iso,
-                                    *popt_new,
-                                    profile = profile,
-                                    line = line,
-                                    abundace_ratio = abundace_ratio
+                    except:
+                        comp_num += 1
 
-                                )
+                if first_try > 0:
 
-                                # determine residual fo the fit
-                                residual = cube_iso[0].data[:, dec, ra] - fit_new[:]
+                    for param in range(len(popt_old)):
 
-                                # determine chi squared of the fit
-                                chisq_new = sum((residual/rms_spect) ** 2)/(len(residual)- (4*comp_new))
+                        fit_param[0].data[param, dec, ra]  = popt_old[param]
+                        fit_err[0].data[param, dec, ra]  = perr_old[param]
 
-                                #print(chisq_new/chisq_old)
+                    cube_fit[0].data[:, dec, ra] = astrokit.two_layer(
+                        comp_old,
+                        0,
+                        temp_ex,
+                        vel_fit,
+                        *popt_old,
+                        profile = profile,
+                        line = line,
+                        abundace_ratio = abundace_ratio
+                    )
 
-                                if ((1. - (chisq_new/chisq_old)) > chisq_ratio):
+                    for comp in range(0, 3*comp_old, 3):
 
-                                    comp_old = comp_new
-                                    popt_old = popt_new
-                                    chisq_old = chisq_new
+                        popt_old[comp] = popt_old[comp]*abundace_ratio
 
-                                    if (chisq_old < chisq_threshold):
+                    cube_bakg[0].data[:, dec, ra] = astrokit.two_layer(
+                        comp_old,
+                        0,
+                        temp_ex,
+                        vel_fit,
+                        *popt_old,
+                        profile = profile,
+                        line = line,
+                        abundace_ratio = abundace_ratio
+                    )
 
-                                        continue_loop = False
+                    chisq_fit[0].data[dec, ra]  = chisq_old
+                    bakg_num[0].data[dec, ra]   = comp_old
 
-                                    else:
+                else:
 
-                                        comp_num += 1
+                    print('failed')
+                    failed_pix[0].data[dec, ra] = 1
 
-                                else:
-
-                                    comp_num += 1
-
-                                    #continue_loop = False
-
-                        except:
-                            comp_num += 1
-
-                    if first_try > 0:
-
-                        for param in range(len(popt_old)):
-
-                            fit_param[0].data[param, dec, ra]  = popt_old[param]
-
-                        cube_fit[0].data[:, dec, ra] = astrokit.two_layer(
-
-                            comp_old,
-                            0,
-                            vel_fit,
-                            *popt_old,
-                            profile = profile,
-                            line = line,
-                            abundace_ratio = abundace_ratio
-
-                        )
-
-                        for comp in range(0, 4*comp_old, 4):
-
-                            popt_old[comp + 1] = popt_old[comp + 1]*abundace_ratio
-
-                        cube_bakg[0].data[:, dec, ra] = astrokit.two_layer(
-
-                            comp_old,
-                            0,
-                            vel_fit,
-                            *popt_old,
-                            profile = profile,
-                            line = line,
-                            abundace_ratio = abundace_ratio
-
-                        )
-
-                        chisq_fit[0].data[dec, ra]  = chisq_old
-                        bakg_num[0].data[dec, ra]   = comp_old
-
-                    else:
-
-                        print('failed')
-                        failed_pix[0].data[dec, ra] = 1
-
-    return fit_param, chisq_fit, bakg_num, failed_pix, cube_fit, cube_bakg
+    return fit_param, fit_err, chisq_fit, bakg_num, failed_pix, cube_fit, cube_bakg
 
 def forg_2layer_cube(
 
     cube_obs,
     cube_rms,
     cube_iso_fit_param,
+    cube_iso_fit_err,
     map_iso_bakg_num,
+    map_bakg_temp_ex,
+    map_forg_temp_ex,
     cube_bakg_guess,
     cube_forg_guess,
     cube_bakg_bound_min,
@@ -1365,7 +1416,7 @@ def forg_2layer_cube(
     line = '12co(3-2)',
     maxfev = 1000,
     max_tau = False,
-    fix_forg_temp = True,
+#    fix_forg_temp = True,
     colden_forg_max = None
 
 ):
@@ -1445,11 +1496,19 @@ def forg_2layer_cube(
     forg_num   = astrokit.zeros_map(cube_obs)
     failed_pix = astrokit.zeros_map(cube_obs)
 
+    temp_ex = np.zeros(2)
+
     #test_count = 0
 
     for dec in range(naxis2):
-        print('Progress: '+str(round((dec*100/naxis2), 1)) +' %')
+        clear_output(wait=True)
+        print('Progress: ' + '#'* int((dec/naxis2)*30+1) + ' '+ str(round((dec/(naxis2-1))*100, 1))+'%')
+        #print('Progress: '+str(round((dec*100/naxis2), 1)) +' %')
         for ra in range(naxis1):
+
+            temp_ex[0] = map_bakg_temp_ex[0].data[dec, ra]
+            temp_ex[1] = map_forg_temp_ex[0].data[dec, ra]
+
             #test_count += 1
             #print('Progress: '+str(round((test_count*100/(naxis2*naxis1) ), 1)) +' %')
 
@@ -1469,44 +1528,45 @@ def forg_2layer_cube(
 
                 while (comp_forg_num < (map_num_forg[0].data[dec, ra]+1 )) and continue_loop:
 
-                    guess     = np.zeros(4 * bakg_num_guess + 4 * comp_forg_num)
-                    bound_min = np.zeros(4 * bakg_num_guess + 4 * comp_forg_num)
-                    bound_max = np.zeros(4 * bakg_num_guess + 4 * comp_forg_num)
+                    guess     = np.zeros(3 * bakg_num_guess + 3 * comp_forg_num)
+                    bound_min = np.zeros(3 * bakg_num_guess + 3 * comp_forg_num)
+                    bound_max = np.zeros(3 * bakg_num_guess + 3 * comp_forg_num)
 
-                    for comp in range(0, int(map_iso_bakg_num[0].data[dec, ra])*4, 4):
-                        for param in range(4):
+                    for comp in range(0, int(map_iso_bakg_num[0].data[dec, ra])*3, 3):
+                        for param in range(3):
 
-                            if param == 1:
+                            if param == 0:
 
                                 guess[comp + param]   = cube_iso_fit_param[0].data[comp + param, dec, ra] * abundace_ratio
+                                bound_min[comp + param] = (cube_iso_fit_param[0].data[comp + param, dec, ra] - cube_iso_fit_err[0].data[comp + param, dec, ra])* abundace_ratio
+                                bound_max[comp + param] = (cube_iso_fit_param[0].data[comp + param, dec, ra] + cube_iso_fit_err[0].data[comp + param, dec, ra])* abundace_ratio
 
                             else:
 
                                 guess[comp + param]   = cube_iso_fit_param[0].data[comp + param, dec, ra]
+                                bound_min[comp + param] = cube_iso_fit_param[0].data[comp + param, dec, ra] - cube_iso_fit_err[0].data[comp + param, dec, ra]
+                                bound_max[comp + param] = cube_iso_fit_param[0].data[comp + param, dec, ra] + cube_iso_fit_err[0].data[comp + param, dec, ra]
 
-                            fit_const = 0.1
-
-                            bound_min[comp + param]   = guess[comp + param] - abs(guess[comp + param]*fit_const)
-                            bound_max[comp + param]   = guess[comp + param] + abs(guess[comp + param]*fit_const)
-
-
+                            #fit_const = 0.1
+                            #print(guess)
+                            #bound_min[comp + param]   = guess[comp + param] - abs(guess[comp + param]*fit_const)
+                            #bound_max[comp + param]   = guess[comp + param] + abs(guess[comp + param]*fit_const)
 
                     if ((dark_bakg_num > 0) and (comp_bakg_num > 0)):
 
                         for comp_bakg in range(
-
-                            int(map_iso_bakg_num[0].data[dec, ra])*4,
-                            bakg_num_guess*4,
-                            4
+                            int(map_iso_bakg_num[0].data[dec, ra])*3,
+                            bakg_num_guess*3,
+                            3
                         ):
-                            for param in range(4):
+                            for param in range(3):
 
                                 if max_tau:
 
                                     tau_rms = astrokit.temp_to_tau(
 
                                         cube_rms[0].data[-1, dec, ra],
-                                        cube_bakg_guess[0].data[comp_bakg, dec, ra],
+                                        temp_ex[0],
                                         line = '13co(3-2)'
                                     )
 
@@ -1516,7 +1576,7 @@ def forg_2layer_cube(
 
                                     tau_max = abundace_ratio
 
-                                if param == 1:
+                                if param == 0:
 
                                     guess[comp_bakg + param] = tau_max/10.
                                     bound_min[comp_bakg + param] = 0.0
@@ -1531,71 +1591,68 @@ def forg_2layer_cube(
                     cube_comp_forg = 0
 
                     for comp_forg in range(
-
-                        bakg_num_guess*4,
+                        bakg_num_guess*3,
                         len(guess),
-                        4
+                        3
                     ):
 
                         fit_const = 0.1
 
-                        for param in range(4):
+                        for param in range(3):
 
                             guess[comp_forg + param]   = cube_forg_guess[0].data[cube_comp_forg + param,   dec, ra]
 
-                            if (param == 0) and fix_forg_temp:
+                            #if (param == 0) and fix_forg_temp:
 
-                                    bound_min[comp_forg + param]   = guess[comp_forg + param] - abs(guess[comp_forg + param]*fit_const)
-                                    bound_max[comp_forg + param]   = guess[comp_forg + param] + abs(guess[comp_forg + param]*fit_const)
+                            #        bound_min[comp_forg + param]   = guess[comp_forg + param] - abs(guess[comp_forg + param]*fit_const)
+                            #        bound_max[comp_forg + param]   = guess[comp_forg + param] + abs(guess[comp_forg + param]*fit_const)
 
+                            #else:
+
+                            bound_min[comp_forg + param] = cube_forg_bound_min[0].data[cube_comp_forg + param, dec, ra]
+
+                            if (param == 0) and colden_forg_max:
+
+                                bound_max[comp_forg + param] = astrokit.optical_depth(
+                                    0.,
+                                    0.,
+                                    bound_max[comp_forg + 3],
+                                    bound_max[comp_forg],
+                                    colden_forg_max,
+                                    abundace_ratio = abundace_ratio,
+                                    profile = profile_out,
+                                    line = line,
+                                    iso_shift = 0.
+                                )
                             else:
 
-                                bound_min[comp_forg + param] = cube_forg_bound_min[0].data[cube_comp_forg + param, dec, ra]
+                                bound_max[comp_forg + param] = cube_forg_bound_max[0].data[cube_comp_forg + param, dec, ra]
 
-                                if (param == 1) and colden_forg_max:
+                        cube_comp_forg += 3
 
-                                    bound_max[comp_forg + param] = astrokit.optical_depth(
-                                        0.,
-                                        0.,
-                                        bound_max[comp_forg + 3],
-                                        bound_max[comp_forg],
-                                        colden_forg_max,
-                                        abundace_ratio = abundace_ratio,
-                                        profile = profile_out,
-                                        line = line,
-                                        iso_shift = 0.
-                                    )
-
-                                else:
-
-                                    bound_max[comp_forg + param] = cube_forg_bound_max[0].data[cube_comp_forg + param, dec, ra]
-
-                        cube_comp_forg += 4
                     try:
 
                         popt_new, pcov_new = curve_fit(
 
                             lambda vel,
                             *param: astrokit.two_layer(
-
                                 bakg_num_guess,
                                 comp_forg_num,
+                                temp_ex,
                                 vel_obs,
                                 *param,
                                 profile = profile_fit,
                                 line = line,
                                 iso_shift = iso_shift,
                                 abundace_ratio = abundace_ratio
-
                             ),
-
                             vel_obs,
                             cube_obs[0].data[:, dec, ra],
                             sigma = cube_rms[0].data[:, dec, ra],
+                            absolute_sigma = True,
                             p0 = guess,
                             bounds = (bound_min, bound_max),
                             maxfev = maxfev
-
                         )
 
                         if first_try == 0:
@@ -1606,9 +1663,9 @@ def forg_2layer_cube(
                             first_try = 1
 
                             fit_old = astrokit.two_layer(
-
                                 comp_bakg_old,
                                 comp_forg_old,
+                                temp_ex,
                                 vel_obs,
                                 *popt_old,
                                 profile = profile_fit,
@@ -1621,7 +1678,7 @@ def forg_2layer_cube(
                             residual = cube_obs[0].data[:, dec, ra] - fit_old[:]
 
                             # determine chi squared of the fit
-                            chisq_old = sum((residual/cube_rms[0].data[:, dec, ra]) ** 2)/(len(residual)- (4*comp_forg_old + 4*comp_bakg_old))
+                            chisq_old = sum((residual/cube_rms[0].data[:, dec, ra]) ** 2)/(len(residual)- (3.*comp_forg_old + 3.*comp_bakg_old))
 
                             if (chisq_old < chisq_threshold):
 
@@ -1655,6 +1712,7 @@ def forg_2layer_cube(
 
                                 comp_bakg_new,
                                 comp_forg_new,
+                                temp_ex,
                                 vel_obs,
                                 *popt_new,
                                 profile = profile_fit,
@@ -1668,7 +1726,7 @@ def forg_2layer_cube(
                             residual = cube_obs[0].data[:, dec, ra] - fit_new[:]
 
                             # determine chi squared of the fit
-                            chisq_new = sum((residual/cube_rms[0].data[:, dec, ra]) ** 2)/(len(residual)- (4*comp_forg_new + 4*comp_bakg_new))
+                            chisq_new = sum((residual/cube_rms[0].data[:, dec, ra]) ** 2)/(len(residual)- (3.*comp_forg_new + 3.*comp_bakg_new))
 
                             #print(chisq_new/chisq_old)
 
@@ -1742,9 +1800,9 @@ def forg_2layer_cube(
                         fit_param[0].data[param, dec, ra]  = popt_old[param]
 
                     cube_fit[0].data[:, dec, ra] = astrokit.two_layer(
-
                         comp_bakg_old,
                         comp_forg_old,
+                        temp_ex,
                         vel_fit,
                         *popt_old,
                         profile = profile_out,
@@ -1757,8 +1815,9 @@ def forg_2layer_cube(
 
                         comp_bakg_old,
                         0,
+                        temp_ex[0],
                         vel_fit,
-                        *popt_old[:comp_bakg_old*4],
+                        *popt_old[:comp_bakg_old*3],
                         profile = profile_out,
                         line = line,
                         abundace_ratio = abundace_ratio
@@ -1770,8 +1829,9 @@ def forg_2layer_cube(
 
                         comp_forg_old,
                         0,
+                        temp_ex[1],
                         vel_fit,
-                        *popt_old[4*comp_bakg_old:],
+                        *popt_old[3*comp_bakg_old:],
                         profile = profile_out,
                         line = line,
                         abundace_ratio = abundace_ratio
@@ -1786,13 +1846,13 @@ def forg_2layer_cube(
 
                     if map_iso_bakg_num[0].data[dec, ra] > 0:
 
-                        guess = np.zeros( 4*int(map_iso_bakg_num[0].data[dec, ra]))
+                        guess = np.zeros(3*int(map_iso_bakg_num[0].data[dec, ra]))
 
-                        for comp in range(0, int(map_iso_bakg_num[0].data[dec, ra])*4, 4):
+                        for comp in range(0, int(map_iso_bakg_num[0].data[dec, ra])*3, 3):
 
-                            for param in range(4):
+                            for param in range(3):
 
-                                if param == 1:
+                                if param == 0:
 
                                     guess[comp + param] = cube_iso_fit_param[0].data[comp + param,   dec, ra]*abundace_ratio
 
@@ -1811,6 +1871,7 @@ def forg_2layer_cube(
 
                             int(map_iso_bakg_num[0].data[dec, ra]),
                             0,
+                            temp_ex[0],
                             vel_fit,
                             *guess,
                             profile = profile_out,

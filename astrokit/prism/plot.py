@@ -5,14 +5,22 @@ import matplotlib.pyplot as plt
 import matplotlib
 import astrokit
 
-def plot_histogram(axis, counts,
-                   fontsize=18,
-                   xmin = None, xmax = None,
-                   ymin = None, ymax = None,
-                   title = 'Distribution',
-                   xlabel = 'Intensity [K km/s]',
-                   ylabel = 'Counts [$\#$]',
-                   save_img= False, img_path = './', img_name = 'spectrum', img_format = 'pdf'):
+def plot_histogram(
+    axis,
+    counts,
+    fontsize=18,
+    xmin = None,
+    xmax = None,
+    ymin = None,
+    ymax = None,
+    title = 'Distribution',
+    xlabel = 'Intensity [K km/s]',
+    ylabel = 'Counts [$\#$]',
+    save_img= False,
+    img_path = './',
+    img_name = 'spectrum',
+    img_format = 'pdf'
+):
 
 
     fig = plt.figure(figsize=(15,15))
@@ -34,21 +42,29 @@ def plot_histogram(axis, counts,
     plt.title(title, size=fontsize)
     plt.xlabel(xlabel, size=fontsize)
     plt.ylabel(ylabel, size=fontsize)
-    plt.rc('text', usetex=True)
-    plt.rc('font', family='serif')
+    #plt.rc('text', usetex=True)
+    #plt.rc('font', family='serif')
 
     if save_img:
         matplotlib.pyplot.savefig(img_path + img_name + '.' + img_format,\
                                   transparent = True, bbox_inches = 'tight', pad_inches = 0)
 
-def plot_spectrum(vel, temp ,
-                  fontsize = 18,
-                  title = 'Spectrum',
-                  ylable = 'T$_{\mathrm{mb}}$ [K]',
-                  xlabel = 'Velocity [km/s]',
-                  xmin = None, xmax = None,
-                  ymin = None, ymax = None,
-                  do_save= False, img_path = './', img_name = 'spectrum', img_format = 'pdf'):
+def plot_spectrum(
+    vel,
+    temp,
+    fontsize = 18,
+    title = 'Spectrum',
+    ylable = 'T$_{\mathrm{mb}}$ [K]',
+    xlabel = 'Velocity [km/s]',
+    xmin = None,
+    xmax = None,
+    ymin = None,
+    ymax = None,
+    do_save= False,
+    img_path = './',
+    img_name = 'spectrum',
+    img_format = 'pdf'
+):
 
     fig = plt.figure(figsize=(15,15))
 
@@ -71,17 +87,23 @@ def plot_spectrum(vel, temp ,
         matplotlib.pyplot.savefig(img_path + img_name + '.' + img_format,\
                                   transparent = True, bbox_inches = 'tight', pad_inches = 0)
 
-def plot_map(sky_map,
-             fontsize=18,
-             figsize = (25, 15),
-             vmin = None, vmax = None,
-             ra_lable = 'RA (J2000)',
-             dec_lable = 'Dec (J2000)',
-             cbar_lable = 'Intensity [K$\,$km/s]',
-             title = 'Moment 0',
-             interpolation = 'none',
-             font_style = 'none',
-             save_img = False, img_path='./', img_name = 'image', img_format = 'pdf'):
+def plot_map(
+    sky_map,
+    fontsize=18,
+    figsize = (18, 15),
+    vmin = None,
+    vmax = None,
+    ra_lable = 'RA (J2000)',
+    dec_lable = 'Dec (J2000)',
+    cbar_lable = 'Intensity [K$\,$km/s]',
+    title = 'Moment 0',
+    interpolation = 'none',
+    font_style = 'none',
+    save_img = False,
+    img_path='./',
+    img_name = 'image',
+    img_format = 'pdf'
+):
 
     wcs = WCS(sky_map[0].header)
 
@@ -89,10 +111,10 @@ def plot_map(sky_map,
     plt.subplot(projection=wcs)
     if (vmin and vmax) is not None:
         cax=plt.imshow(sky_map[0].data, origin='lower', vmin = vmin, vmax =vmax,
-                       cmap='Spectral_r', interpolation = interpolation)
+                       cmap='Spectral_r', interpolation = interpolation, aspect='auto')
     else:
         cax=plt.imshow(sky_map[0].data, origin='lower',
-                       cmap='Spectral_r', interpolation = interpolation)
+                       cmap='Spectral_r', interpolation = interpolation, aspect='auto')
     cbar=plt.colorbar(cax)
     plt.xlabel(ra_lable ,fontsize=fontsize)
     plt.ylabel(dec_lable ,fontsize=fontsize)
@@ -113,18 +135,33 @@ def plot_map(sky_map,
 
 
 # added by Cristian Guevara
-def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
-                      columns, rows,
-                      legend_location = 'upper left', xloc = None, yloc = None,
-                      vmin = None, vmax = None,
-                      ra_lable = 'RA (J2000)',
-                      dec_lable = 'Dec (J2000)',
-                      color_bar = 'Intensity [K$\,$km/s]',
-                      color_map = 'Spectral_r',
-                      interpolation = 'none',
-                      do_contour = False, contour_level = None,
-                      fontsize = 18, font_scale = 6, axis_scale = 6,
-                      save_img = False, img_path='./', img_name = 'image', img_format = 'pdf'):
+def plot_channel_maps(
+    channel_maps,
+    vel_start,
+    vel_end,
+    vel_res,
+    columns,
+    rows,
+    legend_location = 'upper left',
+    xloc = None,
+    yloc = None,
+    vmin = None,
+    vmax = None,
+    ra_lable = 'RA (J2000)',
+    dec_lable = 'Dec (J2000)',
+    color_bar = 'Intensity [K$\,$km/s]',
+    color_map = 'Spectral_r',
+    interpolation = 'none',
+    do_contour = False,
+    contour_level = None,
+    fontsize = 18,
+    font_scale = 6,
+    axis_scale = 6,
+    save_img = False,
+    img_path='./',
+    img_name = 'image',
+    img_format = 'pdf'
+):
 
     if (xloc or yloc) is None:
 
@@ -188,15 +225,15 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         cbar.set_label('Intensity [K km/s]', size=font_scale*max(columns,rows))
         plt.rc('xtick', labelsize = fontsize)
         plt.rc('ytick', labelsize = fontsize)
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
+        #plt.rc('text', usetex=True)
+        #plt.rc('font', family='serif')
 
     elif rows==1 :
 
         fig = plt.figure(dpi=70,figsize=(10*columns, 9*rows*yratio))
         gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=-0.01)
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
+        #plt.rc('text', usetex=True)
+        #plt.rc('font', family='serif')
         for column in range(columns):
                 a =  fig.add_subplot(gs[0, column], projection=w)
                 a.text(channel_maps[0][0].header["NAXIS1"]*xloc,\
@@ -235,8 +272,8 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
 
         fig = plt.figure(dpi=70,figsize=(10*columns, 9*rows*yratio))
         gs = gridspec.GridSpec(rows, columns, hspace=0, wspace=-0.01)
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
+        #plt.rc('text', usetex=True)
+        #plt.rc('font', family='serif')
         for row in range(0,rows):
                 a =  fig.add_subplot(gs[row, 0], projection=w)
                 a.text(channel_maps[0][0].header["NAXIS1"]*xloc, channel_maps[0][0].header["NAXIS2"]*yloc,\
@@ -272,8 +309,8 @@ def plot_channel_maps(channel_maps, vel_start, vel_end, vel_res,
         fig = plt.figure(dpi=70,figsize=(10*columns, 9*rows*yratio))
         gs = gridspec.GridSpec(rows,columns, hspace=0,wspace=-0.01)
         la=0
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
+        #plt.rc('text', usetex=True)
+        #plt.rc('font', family='serif')
         for row in range(0,rows):
             for column in range(0,columns):
                 a =  fig.add_subplot(gs[row, column],projection=w)

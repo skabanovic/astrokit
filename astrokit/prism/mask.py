@@ -897,12 +897,12 @@ def bunit_to_MJysr(
     return map_out
 
 
-
 def reproject_spectral_cube(
 
     input_cube,
     target_cube,
-    target_header = False
+    target_header = False,
+    adaptive_reproject = False
 
 ):
 
@@ -911,19 +911,23 @@ def reproject_spectral_cube(
     target_ax1_len = target_cube[0].header['NAXIS1']
     target_ax2_len = target_cube[0].header['NAXIS2']
 
-    if (input_dimension == 2):
+    if input_dimension == 2:
 
-        empty_cube=np.zeros([target_ax2_len,
-                             target_ax1_len])
+        empty_cube=np.zeros([
+            target_ax2_len,
+            target_ax1_len
+        ])
 
-    elif (input_dimension == 3):
+    elif input_dimension == 3:
 
 
         input_ax3_len = input_cube[0].header['NAXIS3']
 
-        empty_cube=np.zeros([input_ax3_len,
-                             target_ax2_len,
-                             target_ax1_len])
+        empty_cube=np.zeros([
+            input_ax3_len,
+            target_ax2_len,
+            target_ax1_len
+        ])
 
 
     hdu_mask = fits.PrimaryHDU(empty_cube)
@@ -947,7 +951,38 @@ def reproject_spectral_cube(
                     mask_cube[0].header[attribute] = copy.deepcopy(target_cube[0].header[attribute])
 
 
-    mask_cube[0].data, footprint = reproject_adaptive(input_cube, target_cube[0].header)
+    if input_dimension == 2:
+
+        if adaptive_reproject:
+
+            mask_cube[0].data, footprint = reproject_adaptive(input_cube, target_cube[0].header)
+
+        else:
+
+            mask_cube[0].data, footprint = reproject_interp(input_cube, target_cube[0].header)
+
+
+    elif input_dimension == 3:
+
+        temp_map = astrokit.zeros_map(input_cube)
+        target_map = astrokit.zeros_map(target_cube)
+
+        for idx_ax3 in range(input_ax3_len):
+
+            clear_output(wait=True)
+            print('Progress: ' + '#'* int((idx_ax3/input_ax3_len)*30+1) + ' '+ str(round((idx_ax3/(input_ax3_len-1))*100, 1))+'%')
+
+            temp_map[0].data = copy.deepcopy(input_cube[0].data[idx_ax3, :, :])
+
+            if adaptive_reproject:
+
+                mask_cube[0].data[idx_ax3, :, :], footprint = reproject_adaptive(temp_map, target_map[0].header)
+
+            else:
+
+                mask_cube[0].data[idx_ax3, :, :], footprint = reproject_interp(temp_map, target_map[0].header)
+
+
 
     # alternativ:
     #mask_cube[0].data, footprint = reproject_interp(input_cube, target_cube[0].header)
