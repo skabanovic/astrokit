@@ -425,15 +425,41 @@ def brightness_temperatur(temp_ex, line = 'cii'):
 
         freq_0 = 1900.5369e9
 
+    elif line == '12co(1-0)':
+
+        freq_0 = 115.271202e9
+
+    elif line == '13co(1-0)':
+
+        freq_0 = 110.201359e9
+
+    elif line == 'c18o(1-0)':
+
+        freq_0 = 109.782176e9
+
+    elif line == '12co(2-1)':
+
+        freq_0 = 230.538000e9
+
+    elif line == '13co(2-1)':
+
+        freq_0 = 220.398686e9
+
+    elif line == 'c18o(2-1)':
+
+        freq_0 = 219.560358e9
+
     elif line=='12co(3-2)':
 
         freq_0 = 345.79598990e9
 
     elif line == '13co(3-2)':
 
-        # 13CO (3-2) rest frequency [Hz]
-
         freq_0 = 330.58796500e9
+
+    elif line == 'c18o(3-2)':
+
+        freq_0 = 329.330e9
 
 
     temp_0 = (const.h.value * freq_0)/const.k_B.value

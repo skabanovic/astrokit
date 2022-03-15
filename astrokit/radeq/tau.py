@@ -26,10 +26,17 @@ from scipy.optimize import brentq
 from joblib import Parallel, delayed
 
 def black_body(
-    wave,
+    input_quantity,
     temp,
-    unit='frequency',
-    system_of_units = 'SI'):
+    input_unit='frequency',
+    system_of_units = 'SI',
+    input_scale = 'linear'
+
+):
+
+    if input_scale == 'log10':
+
+        input_quantity = 10**input_quantity
 
     if system_of_units == 'SI':
 
@@ -43,17 +50,16 @@ def black_body(
         light_speed = const.c.cgs.value
         boltzmann_const = const.k_B.cgs.value
 
-    if unit == 'frequency':
+    if input_unit == 'frequency':
 
-         spectral_radiance = 2.*plank_const*wave**3/light_speed**2/(np.exp(plank_const*wave/boltzmann_const/temp)-1.)
+         spectral_radiance = 2.*plank_const*input_quantity**3/light_speed**2/(np.exp(plank_const*input_quantity/boltzmann_const/temp)-1.)
 
-    elif unit == 'wavelength':
+    elif input_unit == 'wavelength':
 
-        spectral_radiance = 2.*plank_const*light_speed**2/wave**5/(np.exp(plank_const*light_speed/wave/boltzmann_const/temp)-1.)
+        spectral_radiance = 2.*plank_const*light_speed**2/input_quantity**5/(np.exp(plank_const*light_speed/input_quantity/boltzmann_const/temp)-1.)
 
     else:
         print('error: unit is not correct')
-
 
     return spectral_radiance
 
@@ -156,6 +162,7 @@ def optical_depth_ratio(iso_ratio,
                         error_main=0,
                         error_iso=0,
                         method = "symbolic",
+                        tau_min = 1e-6,
                         tau_max = 30):
 
     obs_ratio=main_comp/iso_comp
@@ -180,7 +187,7 @@ def optical_depth_ratio(iso_ratio,
 
         optical_depth =\
         solver.bisection(lambda tau : tau_ratio_eq(tau, iso_ratio=iso_ratio, ratio_norm=ratio_norm, obs_ratio=obs_ratio),\
-        pos_1=1e-6, pos_2=tau_max, resolution = 1e-6, max_step = 1e6)
+        pos_1=tau_min, pos_2=tau_max, resolution = 1e-6, max_step = 1e6)
 
         if not optical_depth:
 
@@ -368,10 +375,13 @@ def hyperfine_avarage(spect, vel,
     return Tmb_hyper, vel_hyper
 
 
-def inten_to_colden(inten,
-                    Tex=None,
-                    inten_err = 0,
-                    line = 'cii'):
+def inten_to_colden(
+    inten,
+    Tex=None,
+    inten_err = 0,
+    line = 'cii',
+    unit = 'custom'
+):
 
     molecular_line = False
 
@@ -386,24 +396,100 @@ def inten_to_colden(inten,
        # equivalent temperature of the excited level
         T_0 = (const.h.value*freq_cii)/const.k_B.value
 
+        if unit == 'custom':
+
+            # input unit: K km/s
+            # output unit 1/cm^2
+
+            conversion_factor = 1e-1
+
+        elif unit == 'SI':
+
+            # input unit: K m/s
+            # output unit: 1/m^2
+
+            conversion_factor = 1.
+
         if Tex:
 
-            const_term = (1+(2./4.)*np.exp(T_0/Tex))* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
+            const_term = (1+(2./4.)*np.exp(T_0/Tex))* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)*conversion_factor
 
 
         else:
 
-            const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)
+            const_term = (3./2.)* (8.*np.pi*freq_cii**3)/(T_0*const.c.value**3*einstein_coef)*conversion_factor
 
-    if line == '13co(3-2)':
 
-        J_up = 3
+    if line == '12co(1-0)':
+
+        J_up = 1
+
+        dipole_const = 0.11011e-18
+
+        freq_0 = 115.271202e9
+
+        rot_const = 57.635968e9
+
+        molecular_line = True
+
+    elif line == '13co(1-0)':
+
+        J_up = 1
 
         dipole_const = 0.11046e-18
 
-        freq_0 = 330.587e9
+        freq_0 = 110.201359e9
 
         rot_const = 55.101012e9
+
+        molecular_line = True
+
+    elif line == 'c18o(1-0)':
+
+        J_up = 1
+
+        dipole_const = 0.11049e-18
+
+        freq_0 = 109.782176e9
+
+        rot_const = 54.891421e9
+
+        molecular_line = True
+
+
+    elif line == '12co(2-1)':
+
+        J_up = 2
+
+        dipole_const = 0.11011e-18
+
+        freq_0 = 230.538000e9
+
+        rot_const = 57.635968e9
+
+        molecular_line = True
+
+    elif line == '13co(2-1)':
+
+        J_up = 2
+
+        dipole_const = 0.11046e-18
+
+        freq_0 = 220.398686e9
+
+        rot_const = 55.101012e9
+
+        molecular_line = True
+
+    elif line == 'c18o(2-1)':
+
+        J_up = 2
+
+        dipole_const = 0.11049e-18
+
+        freq_0 = 219.560358e9
+
+        rot_const = 54.891421e9
 
         molecular_line = True
 
@@ -414,9 +500,22 @@ def inten_to_colden(inten,
 
         dipole_const = 0.11011e-18
 
-        freq_0 = 345.795e9
+        freq_0 = 345.79598990e9
 
         rot_const = 57.635968e9
+
+        molecular_line = True
+
+
+    elif line == '13co(3-2)':
+
+        J_up = 3
+
+        dipole_const = 0.11046e-18
+
+        freq_0 = 330.58796500e9
+
+        rot_const = 55.101012e9
 
         molecular_line = True
 
@@ -438,14 +537,28 @@ def inten_to_colden(inten,
 
         #rot_const = freq_0/(2.*J_up)
 
-        const_unit = 1e6
+        if unit == 'custom':
+
+            # input unit: K km/s
+            # output unit 1/cm^2
+
+            conversion_factor = 1e5
+
+        elif unit == 'SI':
+
+            # input unit: K m/s
+            # output unit: 1/m^2
+
+            conversion_factor = 1e6
+
+
 
         T_0 = (const.h.cgs.value * freq_0)/const.k_B.cgs.value
 
         E_up = const.h.cgs.value*rot_const*J_up*(J_up+1.)
 
         const_term =\
-            (3.*const.h.cgs.value*const_unit)/(8.*np.pi**3*dipole_const**2*J_up)\
+            (3.*const.h.cgs.value*conversion_factor)/(8.*np.pi**3*dipole_const**2*J_up)\
             *( (const.k_B.cgs.value * Tex)/(const.h.cgs.value*rot_const)+1./3.)\
             * np.exp(E_up/(const.k_B.cgs.value*Tex))\
             /((np.exp(T_0/Tex)-1.)*(astrokit.brightness_temperatur(Tex, line = line) - astrokit.brightness_temperatur(2.7, line = line)) )
@@ -456,10 +569,13 @@ def inten_to_colden(inten,
 
     return colden, colden_err
 
-def colden_map(inten,
-               inten_err = None,
-               temp_ex = None,
-               line = 'cii'):
+def colden_map(
+    inten,
+    inten_err = None,
+    temp_ex = None,
+    line = 'cii',
+    unit = 'custom'
+):
 
 
     colden     = astrokit.zeros_map(inten)
@@ -467,15 +583,21 @@ def colden_map(inten,
 
     if inten_err:
 
-        colden[0].data, colden_err[0].data = inten_to_colden(inten[0].data,
-                                                             Tex=temp_ex,
-                                                             inten_err = inten_err[0].data,
-                                                             line = line)
+        colden[0].data, colden_err[0].data = inten_to_colden(
+            inten[0].data,
+            Tex=temp_ex,
+            inten_err = inten_err[0].data,
+            line = line,
+            unit = unit
+        )
     else:
 
-        colden[0].data, colden_err[0].data = inten_to_colden(inten[0].data,
-                                                             Tex=temp_ex,
-                                                             line = line)
+        colden[0].data, colden_err[0].data = inten_to_colden(
+            inten[0].data,
+            Tex=temp_ex,
+            line = line,
+            unit = unit
+        )
 
 
 ###############################################################################
@@ -532,7 +654,7 @@ def colden_to_mass(colden,
                    colden_err=0,
                    area_err=None,
                    line = 'hi',
-                   abundance_ratio = 1.2e-4):
+                   abundance_ratio = 1.6e-4):
 
 
     if line == 'hi':

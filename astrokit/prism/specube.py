@@ -538,7 +538,7 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
         #rms_noise = np.sqrt(sum(spect_noise**2)/(len(spect_noise)-sum(rms_mask)))
 
         if int(len(spect_noise)) == int(np.sum(num_of_zeros)):
-            
+
             rms_noise = np.nan
 
         else:
@@ -1062,24 +1062,24 @@ def pi_diagram(
 
     path,
     hdul,
-    radius = None
+    kernel_size = None
 
 ):
 
     intens = np.zeros_like(path[0,:])
 
-    if radius:
+    if kernel_size is None:
 
-        radius = radius/3600
+        # kernel_size = 0.5*beam_size as default
+        kernel_size = (hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.
 
     else:
 
-        radius = (hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.
+        kernel_size = kernel_size/3600.
 
 
     grid2d_ax1, grid2d_ax2 = get_grid(hdul)
 
-    diameter = 2.*radius
 
     for pos in range(len(intens)):
 
@@ -1087,7 +1087,10 @@ def pi_diagram(
         grid2d_r = np.sqrt((grid2d_ax2 - path[1, pos])**2 + ((grid2d_ax1 - path[0, pos]) * np.cos(path[1, pos]*np.pi/180.))**2)
 
         # define relativ radius (3*sigma)
-        sig3_r= 3.*diameter/2./np.sqrt(2.*np.log(2.))
+        sig3_r= 3.*kernel_size
+
+        # replace by simply
+        # grid2d_sig3 = np.where( grid2d_r < sig3_r )
 
         # find relavant coordinat values
         grid2d_sig3 = grid2d_r[np.where( grid2d_r < sig3_r )]
@@ -1099,7 +1102,7 @@ def pi_diagram(
         for idx_beam in range(len(idx_sig3[0,:])):
 
             weight = curve.gauss_2d(
-                diameter,
+                kernel_size,
                 path[0, pos],
                 path[1, pos],
                 grid2d_ax1[idx_sig3[0,idx_beam],
@@ -1117,10 +1120,12 @@ def pi_diagram(
     return intens
 
 
-def pv_diagram(path,
-               hdul,
-               path_dist,
-               radius = None):
+def pv_diagram(
+    path,
+    hdul,
+    kernel_size = None,
+    path_dist = None,
+):
 
     #spectra=np.zeros([len(path[0,:]),len(hdul[0].data[:,0,0])])
 
@@ -1134,12 +1139,23 @@ def pv_diagram(path,
     empty_diagram[0].header['NAXIS1'] = len(path)
 
     ref_pos = 0.
-    step_size = path_dist[1]-path_dist[0]
 
-    empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
-    empty_diagram[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
-    empty_diagram[0].header['CDELT1'] = step_size
-    empty_diagram[0].header['CRPIX1'] = ref_pos
+    if path_dist is None:
+
+        step_size = np.sqrt((path[0, 1] - path[0, 0])**2+(path[1, 1] - path[1, 0]))
+
+        empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
+        empty_diagram[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
+        empty_diagram[0].header['CDELT1'] = step_size
+        empty_diagram[0].header['CRPIX1'] = ref_pos
+
+    else:
+        step_size = path_dist[1]-path_dist[0]
+
+        empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
+        empty_diagram[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
+        empty_diagram[0].header['CDELT1'] = step_size
+        empty_diagram[0].header['CRPIX1'] = ref_pos
 
     empty_diagram[0].header['NAXIS1'] = hdul[0].header['NAXIS1']
     empty_diagram[0].header['CTYPE2'] = hdul[0].header['CTYPE3']
@@ -1150,13 +1166,14 @@ def pv_diagram(path,
     empty_diagram[0].header['OBJECT'] = hdul[0].header['OBJECT']
     empty_diagram[0].header['LINE'] = hdul[0].header['LINE']
 
-    if radius:
+    if kernel_size is None:
 
-        radius = Angle(radius*u.arcsec)
+        # use as default 0.5*beam-size
+        kernel_size = ((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)
 
     else:
 
-        radius = Angle(((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)*u.deg)
+        kernel_size = kernel_size/3600.
 
 
     grid2d_ax1, grid2d_ax2 = get_grid(hdul)
@@ -1166,8 +1183,8 @@ def pv_diagram(path,
         # determie the distance from the line points to every grid point
         grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+((grid2d_ax1-path[0, pos])*np.cos(path[1, pos]*np.pi/180.))**2)
 
-        # define relativ radius (3*sigma)
-        sig3_r = 3.* radius.deg
+        # define relativ radius (3*sigma ~ 3* fwhm )
+        sig3_r = 3.* kernel_size
 
         # find relavant coordinat values
         grid2d_sig3=grid2d_r[np.where( grid2d_r < sig3_r )]
@@ -1178,9 +1195,12 @@ def pv_diagram(path,
 
         for idx_beam in range(len(idx_sig3[0,:])):
 
-            weight=curve.gauss_2d(radius.deg, path[0,pos], path[1,pos], \
-                                 grid2d_ax1[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]], \
-                                 grid2d_ax2[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]])
+            weight=curve.gauss_2d(
+                kernel_size,
+                path[0,pos], path[1,pos],
+                grid2d_ax1[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]],
+                grid2d_ax2[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]]
+            )
 
             empty_diagram[0].data[:, pos] = empty_diagram[0].data[:, pos]+\
             hdul[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]*weight

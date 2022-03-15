@@ -19,12 +19,16 @@ from astropy.wcs import WCS
 
 from astrokit.prism import specube
 
-def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_frame = 'icrs'):
+from astropy import constants as const
+
+import astrokit
+
+def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, gc_dist = 8178, coor_frame = 'icrs'):
 
     obj_coor = SkyCoord(ra=obj_pos1, dec=obj_pos2, distance = obj_dist, frame = coor_frame)
 
-    gc_dist = 8178
-    #gc_dist = 7900
+    #gc_dist = 8178
+    #gc_dist = 7900 # used in Milam + 2015
 
     gc_dist_err = 22
 
@@ -104,10 +108,10 @@ def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all'):
 
         if star:
 
-            print(star[0])
+            #print(star[0])
 
-            if sp_type == 'all' or sp_type == chr(star[0]):
-            #if sp_type == 'all' or sp_type == star[0]:
+            #if sp_type == 'all' or sp_type == chr(star[0]):
+            if sp_type == 'all' or sp_type == star[0]:
 
                 if not star_id[:] == query_table[obj]["MAIN_ID"]:
 
@@ -198,20 +202,34 @@ def uv_luminosity(temp, lum):
 
     for star in range(num_star):
 
-        bb = BlackBody1D(temperature=temp[star]*u.K)
-
-        wav_max  = 2897.8e4/temp[star]
-        wav_st   = wav_max*1.0e-1
-        wav_end  = wav_max*1.0e1
+        wav_max  = np.log10(2897.8e-4/temp[star])
+        wav_st = wav_max-2
+        wav_end = wav_max+2
         wav_step = (wav_end-wav_st)/1e6
 
-        wav = np.arange(wav_st, wav_end, wav_step) * u.AA
-        flux = bb(wav).to(FLAM, u.spectral_density(wav))
+        wav = np.arange(wav_st, wav_end, wav_step)
+        flux = astrokit.black_body(
+            wav,
+            temp[star],
+            input_unit='wavelength',
+            system_of_units = 'cgs',
+            input_scale = 'log10'
+            )
 
         integ_flux = np.trapz(flux, wav)
 
-        wav_uv = np.arange(910, 2066, wav_step) * u.AA
-        flux_uv = bb(wav_uv).to(FLAM, u.spectral_density(wav_uv))
+        wav_st = np.log10(910e-8)
+        wav_end = np.log10(2066e-8)
+
+        wav_uv = np.arange(wav_st, wav_end, wav_step)
+
+        flux_uv = astrokit.black_body(
+            wav_uv,
+            temp[star],
+            input_unit='wavelength',
+            system_of_units = 'cgs',
+            input_scale = 'log10'
+            )
 
         integ_flux_uv = np.trapz(flux_uv, wav_uv)
 
@@ -246,8 +264,19 @@ def sky_grid(cent_ra, cent_dec, size_ra, size_dec, res = 'nan'):
     return empty_grid, grid_ax1, grid_ax2
 
 
-def uv_sky(pos_ra, pos_dec, pos_radius, coord_sys, sp_type, grid_dist,\
-           hdul_inp = 0.0, size_ra = 0.0, size_dec =0.0, input_type = 'fits' ):
+def uv_sky(
+
+    pos_ra,
+    pos_dec,
+    pos_radius,
+    coord_sys,
+    sp_type,
+    grid_dist,
+    hdul_inp = 0.0,
+    size_ra = 0.0,
+    size_dec =0.0,
+    input_type = 'fits'
+    ):
 
     stars   =  star_properties(pos_ra, pos_dec, pos_radius, coord_sys, sp_type)
 
@@ -321,3 +350,65 @@ def uv_sky(pos_ra, pos_dec, pos_radius, coord_sys, sp_type, grid_dist,\
             hdul_uv[0].data = hdul_uv[0].data + uv_grid
 
     return hdul_uv
+
+
+def get_uv_map(
+
+    stars_pos,
+    stars_dist,
+    grid_dist,
+    grid_inp,
+    coord_sys,
+    stars_lum = None,
+    stars_temp = None,
+    stars_type = None,
+    stars_evo = None,
+
+):
+
+    num_stars = len(stars_pos)
+
+    if stars_lum is None:
+
+        # Instantiate class object
+        sdj = pyasl.SpecTypeDeJager()
+
+        llum  = np.zeros(num_stars)
+        lteff = np.zeros(num_stars)
+
+        for star in range(num_stars):
+
+            llum[star], lteff[star] = sdj.lumAndTeff(stars_type[star], stars_evo[star])
+
+        stars_lum  = 10**llum * const.L_sun.cgs.value
+        stars_temp = 10**lteff
+
+    uv_lum = astrokit.uv_luminosity(stars_temp, stars_lum)
+
+    map_uv = astrokit.zeros_map(grid_inp)
+
+    grid_ra, grid_dec = astrokit.get_grid(map_uv)
+
+    star_pos = SkyCoord(
+        ra = stars_pos[:, 0] * u.deg,
+        dec = stars_pos[:, 1] * u.deg,
+        distance = stars_dist * u.pc,
+        frame = coord_sys
+    )
+
+    grid_pos = SkyCoord(
+        ra = grid_ra*u.deg,
+        dec = grid_dec*u.deg,
+        distance = grid_dist*u.pc,
+        frame = coord_sys
+    )
+
+    for star in range(num_stars):
+
+        grid2star = grid_pos.separation_3d(star_pos[star])
+
+        uv_grid = uv_lum[star]/(4.*np.pi*grid2star.cm**2)
+
+        map_uv[0].data = map_uv[0].data + uv_grid
+
+    return map_uv

@@ -171,7 +171,13 @@ def struct_size(
 #
 ################################################################################
 
-    return area_size, area_size_err
+    if dist_err == 0:
+
+        return area_size
+
+    else:
+
+        return area_size, area_size_err
 
 
 def struct_mass(
@@ -181,18 +187,37 @@ def struct_mass(
     dendro,
     dist,
     dist_err = 0,
-    abundance_ratio = 1.2e-4,
+    abundance_ratio = 1., # 1.6e-4 for cii to hi
     struct_type = "leaf",
-    line = 'cii'
+    line = 'hi'
 
 ):
 
-    hydro_mass = 1.6735575e-27
+    unified_atomic_mass = 1.66053906660e-27 # in kg
+
+    if line == 'hi':
+
+        # hydrogen mass
+        particle_mass = 1.00784 * unified_atomic_mass
+
+    elif line == 'h2':
+
+        particle_mass = 2.01588 * unified_atomic_mass
+
+    elif line == 'cii':
+
+        # carbon mass
+        particle_mass = 12.0107 * unified_atomic_mass
+
+    elif line == 'co':
+
+        particle_mass = 28.0101 * unified_atomic_mass
+
 
     res_ra = abs(colden[0].header["CDELT1"])
     res_dec = abs(colden[0].header["CDELT2"])
 
-    grid2d_ra, grid2d_dec = astrokit.get_grid(colden)
+    #grid2d_ra, grid2d_dec = astrokit.get_grid(colden)
 
     if struct_type == "leaf" or struct_type == "branch":
 
@@ -221,9 +246,9 @@ def struct_mass(
         pix_size_err =  Angle(res_ra*u.deg).rad * Angle(res_dec*u.deg).rad * 2.* dist * dist_err
 
         mass[0].data[map_idx[0][:], map_idx[1][:]] = (  pix_size
-                                                      * colden[0].data[map_idx[0][:], map_idx[1][:]]*hydro_mass)/abundance_ratio
+                                                      * colden[0].data[map_idx[0][:], map_idx[1][:]]*particle_mass)/abundance_ratio
 
-        mass_err[0].data[map_idx[0][:], map_idx[1][:]] = hydro_mass/abundance_ratio\
+        mass_err[0].data[map_idx[0][:], map_idx[1][:]] = particle_mass/abundance_ratio\
                                                        * np.sqrt(  pix_size_err**2
                                                                  * colden[0].data[map_idx[0][:], map_idx[1][:]]**2
                                                                  + pix_size**2
