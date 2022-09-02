@@ -1,6 +1,6 @@
 #############################################################
 #
-#  radeq.py includes the two layer multi component
+#  radeq.py includes the two layer multi componentk
 #  radiative transfer equations.
 #
 #  CHAOS (Cologne Hacked Astrophysical Software)
@@ -19,15 +19,23 @@ from astropy import constants as const
 
 from IPython.display import clear_output
 
-def line_profile(vel = None,
-                 amp = None,
-                 vel_0 = None,
-                 width = None,
-                 abundace_ratio = 67.,
-                 profile = 'gauss',
-                 line = 'cii',
-                 iso_shift = 0.,
-                 norm = False):
+def line_profile(
+    
+    vel = None,
+    amp = None,
+    vel_0 = None,
+    width = None,
+    abundace_ratio = 67.,
+    profile = 'gauss',
+    line = 'cii',
+    iso_shift = 0.,
+    norm = False
+    
+):
+
+    #print('line profile:')
+    #print(profile)
+    #print(line)
 
     if line == 'cii':
 
@@ -86,9 +94,9 @@ def line_profile(vel = None,
 
         # velocity shift of the [13CII] F(2-1), F(1-0) and F(1-1)
         # transition lines with respect to the [12CII] line [km/s]
-        vel_13cii_f21 = -11.2
-        vel_13cii_f10 =  65.2
-        vel_13cii_f11 = -63.3
+        vel_13cii_f21 = 11.2
+        vel_13cii_f10 = -65.2
+        vel_13cii_f11 = 63.3
 
         # relative line strength of the 13CII satellites
         line_f21_norm = 0.625
@@ -100,15 +108,15 @@ def line_profile(vel = None,
 
         # [13CII] F(2-1) line profile
         line_13cii_f21 = (line_f21_norm/abundace_ratio)\
-                       * np.exp(-(vel+vel_13cii_f21-vel_0)**2*beta/width**2)
+                       * np.exp(-(vel-vel_13cii_f21-vel_0)**2*beta/width**2)
 
         # [13CII] F(1-0) line profile
         line_13cii_f10 = (line_f10_norm/abundace_ratio)\
-                       * np.exp(-(vel+vel_13cii_f10-vel_0)**2*beta/width**2)
+                       * np.exp(-(vel-vel_13cii_f10-vel_0)**2*beta/width**2)
 
         # [13CII] F(1-1) line profile
         line_13cii_f11 = (line_f11_norm/abundace_ratio)\
-                       * np.exp(-(vel+vel_13cii_f11-vel_0)**2*beta/width**2)
+                       * np.exp(-(vel-vel_13cii_f11-vel_0)**2*beta/width**2)
 
         if norm:
 
@@ -158,9 +166,9 @@ def multi_line_profile(vel,
 
             # velocity shift of the [13CII] F(2-1), F(1-0) and F(1-1)
             # transition lines with respect to the [12CII] line [km/s]
-            vel_13cii_f21 = -11.2
-            vel_13cii_f10 =  65.2
-            vel_13cii_f11 = -63.3
+            vel_13cii_f21 = 11.2
+            vel_13cii_f10 = -65.2
+            vel_13cii_f11 = 63.3
 
             # relative line strength of the 13CII satellites
             line_f21_norm = 0.625
@@ -172,15 +180,15 @@ def multi_line_profile(vel,
 
             # [13CII] F(2-1) line profile
             line_13cii_f21 = (line_f21_norm/abundace_ratio)\
-                           * np.exp(-(vel+vel_13cii_f21-vel_0)**2*beta/width**2)
+                           * np.exp(-(vel-vel_13cii_f21-vel_0)**2*beta/width**2)
 
             # [13CII] F(1-0) line profile
             line_13cii_f10 = (line_f10_norm/abundace_ratio)\
-                           * np.exp(-(vel+vel_13cii_f10-vel_0)**2*beta/width**2)
+                           * np.exp(-(vel-vel_13cii_f10-vel_0)**2*beta/width**2)
 
             # [13CII] F(1-1) line profile
             line_13cii_f11 = (line_f11_norm/abundace_ratio)\
-                           * np.exp(-(vel+vel_13cii_f11-vel_0)**2*beta/width**2)
+                           * np.exp(-(vel-vel_13cii_f11-vel_0)**2*beta/width**2)
 
             if norm:
 
@@ -210,15 +218,17 @@ def multi_line_profile(vel,
 #
 #############################################################
 
-def optical_depth(vel,
-                  vel_0,
-                  width,
-                  temp_ex,
-                  colden,
-                  abundace_ratio = 67.,
-                  profile = 'cii',
-                  line = 'cii',
-                  iso_shift = 0.):
+def optical_depth(
+    vel,
+    vel_0,
+    width,
+    temp_ex,
+    colden,
+    abundace_ratio = 67.,
+    profile = 'cii',
+    line = 'cii',
+    iso_shift = 0.
+):
 
     molecular_line = False
 
@@ -421,7 +431,11 @@ def column_density(vel_0,
 
 def brightness_temperatur(temp_ex, line = 'cii'):
 
-    if line=='cii':
+    if line=='hi':
+
+        freq_0 = 1.4204057517667e9
+
+    elif line=='cii':
 
         freq_0 = 1900.5369e9
 
@@ -539,146 +553,296 @@ def two_layer(
     profile,
     line,
     iso_shift = 0.,
-    abundace_ratio,
-    input_colden = False
+    line_shift = None,
+    line_ratio = None,
+    abundace_ratio = None,
+    input_colden = False,
+    temp_cont = None,
 
 ):
 
-    bakg_tau = np.zeros_like(vel)
-    forg_tau = np.zeros_like(vel)
+    forg_tau_tot = np.zeros_like(vel)
+    
+    bakg_term = np.zeros_like(vel)
+    forg_term = np.zeros_like(vel)
 
-    if (forg_num > 0):
+    cont_term = np.zeros_like(vel)
+    
+    check_list = isinstance(line, list)
 
-        for i in range(0, (3*bakg_num), 3):
+    #print(check_list)
 
-            vel_0    = param[i+1]
-            width    = param[i+2]
+    if check_list:
 
-            if input_colden:
-
-                colden = param[i]
-
-                tau = optical_depth(
-
-                    vel,
-                    vel_0,
-                    width,
-                    temp_ex[0],
-                    colden,
-                    abundace_ratio = abundace_ratio,
-                    profile = profile,
-                    line = line,
-                    iso_shift = iso_shift
-
-                )
-
-            else:
-
-                tau_0    = param[i]
-
-                tau = line_profile(
-
-                    vel,
-                    tau_0,
-                    vel_0,
-                    width,
-                    abundace_ratio,
-                    profile,
-                    line,
-                    iso_shift,
-                    norm = False
-
-                )
-            bakg_tau +=  tau
-
-        for i in range((3*bakg_num), (3*bakg_num+3*forg_num), 3):
-
-            vel_0    = param[i+1]
-            width    = param[i+2]
-
-            if input_colden:
-
-                colden = param[i]
-
-                tau = optical_depth(
-
-                    vel,
-                    vel_0,
-                    width,
-                    temp_ex[1],
-                    colden,
-                    abundace_ratio = abundace_ratio,
-                    profile = profile,
-                    line = line,
-                    iso_shift = iso_shift
-
-                )
-
-            else:
-
-                tau_0    = param[i]
-
-                tau = line_profile(
-
-                    vel,
-                    tau_0,
-                    vel_0,
-                    width,
-                    abundace_ratio,
-                    profile,
-                    line,
-                    iso_shift,
-                    norm = False
-
-                )
-
-            forg_tau += tau
-
-        bakg_term = brightness_temperatur(temp_ex[0], line)*(1. - np.exp(-bakg_tau))
-        forg_term = brightness_temperatur(temp_ex[1], line)*(1. - np.exp(-forg_tau))
-
-        return (forg_term + bakg_term * np.exp(-forg_tau))
-
+        num_lines = len(line)
+    
     else:
 
-        for i in range(0, (3*bakg_num), 3):
+        num_lines = 1
 
-            vel_0    = param[i+1]
-            width    = param[i+2]
+    for idx_line in range(num_lines):
+        
+        bakg_tau = np.zeros_like(vel)
+        forg_tau = np.zeros_like(vel) 
 
-            if input_colden:
+        if num_lines == 1:
 
-                colden = param[i]
+            profile = [profile]
 
-                tau = optical_depth(vel,
-                                    vel_0,
-                                    width,
-                                    temp_ex,
-                                    colden,
-                                    abundace_ratio = abundace_ratio,
-                                    profile = profile,
-                                    line = line,
-                                    iso_shift = iso_shift)
+            line = [line]
+
+      #  else:
+
+      #      profile = profiles[idx_line] 
+
+      #      line = lines[idx_line]
+
+        if (forg_num > 0):
+
+            if num_lines == 1:
+
+                temp_bakg = temp_ex[0]
+                temp_forg = temp_ex[1]
+
+                #print('num is = 1')
+                #print(temp_bakg)
 
             else:
 
-                tau_0    = param[i]
+                temp_bakg = temp_ex[idx_line, 0]
+                temp_forg = temp_ex[idx_line, 1]
 
-                tau = line_profile(vel,
-                                   tau_0,
-                                   vel_0,
-                                   width,
-                                   abundace_ratio,
-                                   profile,
-                                   line,
-                                   iso_shift,
-                                   norm = False)
+                #print('num is > 1')
+                #print(temp_bakg)
 
-            bakg_tau += tau
+            for i in range(0, (3*bakg_num), 3):
 
-        bakg_term = brightness_temperatur(temp_ex, line)*(1. - np.exp(-bakg_tau))
+                if num_lines == 1:
 
-        return bakg_term
+                    vel_0 = param[i+1]
+                
+                else:
+                
+                    vel_0 = param[i+1] + line_shift[idx_line]    
+
+                width    = param[i+2]
+
+                if input_colden:
+
+                    if num_lines == 1:
+
+                        colden = param[i]
+
+                    else:
+
+                        colden = param[i]/line_ratio[idx_line]
+   
+                    tau = optical_depth(
+
+                        vel,
+                        vel_0,
+                        width,
+                        temp_bakg,
+                        colden,
+                        abundace_ratio = abundace_ratio,
+                        profile = profile[idx_line],
+                        line = line[idx_line],
+                        iso_shift = iso_shift
+
+                    )
+
+                else:
+
+                    if num_lines == 1:
+                        
+                        tau_0 = param[i]
+
+                    else:
+
+                        tau_0 = param[i]/line_ratio[idx_line]
+
+                    tau = line_profile(
+
+                        vel,
+                        tau_0,
+                        vel_0,
+                        width,
+                        abundace_ratio,
+                        profile[idx_line],
+                        line[idx_line],
+                        iso_shift,
+                        norm = False
+
+                    )
+
+                bakg_tau = bakg_tau + tau
+
+            for i in range((3*bakg_num), (3*bakg_num+3*forg_num), 3):
+
+                if num_lines == 1:
+
+                    vel_0 = param[i+1]
+                
+                else:
+                
+                    vel_0 = param[i+1] + line_shift[idx_line]    
+
+                width    = param[i+2]
+
+                if input_colden:
+
+                    if num_lines == 1:
+
+                        colden = param[i]
+
+                    else:
+
+                        colden = param[i]/line_ratio[idx_line]
+
+                    tau = optical_depth(
+
+                        vel,
+                        vel_0,
+                        width,
+                        temp_forg,
+                        colden,
+                        abundace_ratio = abundace_ratio,
+                        profile = profile[idx_line],
+                        line = line[idx_line],
+                        iso_shift = iso_shift
+
+                    )
+
+                else:
+
+                    if num_lines == 1:
+                        
+                        tau_0 = param[i]
+
+                    else:
+
+                        tau_0 = param[i]/line_ratio[idx_line]
+
+                    tau = line_profile(
+
+                        vel,
+                        tau_0,
+                        vel_0,
+                        width,
+                        abundace_ratio,
+                        profile[idx_line],
+                        line[idx_line],
+                        iso_shift,
+                        norm = False
+
+                    )
+
+                forg_tau = forg_tau + tau
+
+
+            bakg_term = bakg_term + brightness_temperatur(temp_bakg, line[idx_line])*(1. - np.exp(-bakg_tau))
+            forg_term = forg_term + brightness_temperatur(temp_forg, line[idx_line])*(1. - np.exp(-forg_tau))
+            
+            forg_tau_tot = forg_tau_tot + forg_tau
+            
+            #print(np.max(bakg_tau))
+            #print(np.max(forg_tau))
+            
+            #print(idx_line)
+            #plt.plot(vel, forg_term + bakg_term * np.exp(-forg_tau_tot))
+            
+
+            if temp_cont is not None:
+
+                cont_term = cont_term + brightness_temperatur(temp_cont, line[idx_line])*(np.exp(-bakg_tau-forg_tau) - 1.)   
+
+        else:
+
+            if num_lines == 1:
+
+                temp_bakg = temp_ex
+
+            else:
+
+                temp_bakg = temp_ex[idx_line]
+
+            for i in range(0, (3*bakg_num), 3):
+
+                if num_lines == 1:
+
+                    vel_0 = param[i+1]
+                
+                else:
+                
+                    vel_0 = param[i+1] + line_shift[idx_line]    
+
+                width    = param[i+2]
+
+                if input_colden:
+
+                    if num_lines == 1:
+
+                        colden = param[i]
+
+                    else:
+
+                        colden = param[i]/line_ratio[idx_line]
+
+                    tau = optical_depth(
+                        vel,
+                        vel_0,
+                        width,
+                        temp_bakg,
+                        colden,
+                        abundace_ratio = abundace_ratio,
+                        profile = profile[idx_line],
+                        line = line[idx_line],
+                        iso_shift = iso_shift
+                    )
+
+                else:
+
+                    if num_lines == 1:
+                        
+                        tau_0 = param[i]
+
+                    else:
+
+                        tau_0 = param[i]/line_ratio[idx_line]
+
+                    #print('two layer function:')
+                    #print(profile[idx_line])
+                    #print(line[idx_line])
+
+                    tau = line_profile(
+                        vel,
+                        tau_0,
+                        vel_0,
+                        width,
+                        abundace_ratio,
+                        profile[idx_line],
+                        line[idx_line],
+                        iso_shift,
+                        norm = False
+                    )
+
+                bakg_tau = bakg_tau + tau
+
+
+            bakg_term = bakg_term + brightness_temperatur(temp_bakg, line[idx_line])*(1. - np.exp(-bakg_tau))
+
+            if temp_cont is not None:
+
+                cont_term = cont_term + brightness_temperatur(temp_cont, line[idx_line])*(np.exp(-bakg_tau) - 1.)
+
+
+    #if (forg_num > 0):
+
+    return (cont_term + forg_term + bakg_term * np.exp(-forg_tau_tot))
+
+    #else:
+
+    #    return (cont_term + bakg_term)
 
 def temp_mb_error(
 
@@ -740,31 +904,63 @@ def plot_2layer_model(
 
     vel_plot = np.arange(vel[0], vel[-1], res_plot)
 
-    temp_fit = astrokit.two_layer(
-        bakg_num,
-        forg_num,
-        temp_ex,
-        vel,
-        *fit_param,
-        profile = profile,
-        line = line,
-        iso_shift = iso_shift,
-        abundace_ratio = abundace_ratio,
-        input_colden = input_colden
+    if forg_num == 0:
+
+        temp_fit = astrokit.two_layer(
+            bakg_num,
+            forg_num,
+            temp_ex[0],
+            vel,
+            *fit_param,
+            profile = profile,
+            line = line,
+            iso_shift = iso_shift,
+            abundace_ratio = abundace_ratio,
+            input_colden = input_colden
         )
 
-    temp_plot = astrokit.two_layer(
-        bakg_num,
-        forg_num,
-        temp_ex,
-        vel_plot,
-        *fit_param,
-        profile = profile,
-        line = line,
-        iso_shift = iso_shift,
-        abundace_ratio = abundace_ratio,
-        input_colden = input_colden
+        temp_plot = astrokit.two_layer(
+            bakg_num,
+            forg_num,
+            temp_ex[0],
+            vel_plot,
+            *fit_param,
+            profile = profile,
+            line = line,
+            iso_shift = iso_shift,
+            abundace_ratio = abundace_ratio,
+            input_colden = input_colden
         )
+
+    else:
+
+        temp_fit = astrokit.two_layer(
+            bakg_num,
+            forg_num,
+            temp_ex,
+            vel,
+            *fit_param,
+            profile = profile,
+            line = line,
+            iso_shift = iso_shift,
+            abundace_ratio = abundace_ratio,
+            input_colden = input_colden
+        )
+
+        temp_plot = astrokit.two_layer(
+            bakg_num,
+            forg_num,
+            temp_ex,
+            vel_plot,
+            *fit_param,
+            profile = profile,
+            line = line,
+            iso_shift = iso_shift,
+            abundace_ratio = abundace_ratio,
+            input_colden = input_colden
+        )
+
+
 
 
     # determine residula of the fit

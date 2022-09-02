@@ -27,7 +27,6 @@ from reproject import reproject_interp, reproject_adaptive
 import cygrid
 
 def regrid_spectral_cube(
-
     input_cube,
     target_cube,
     input_beam = None,
@@ -35,7 +34,6 @@ def regrid_spectral_cube(
     input_frame = 'icrs',
     target_frame = 'icrs',
     target_header = False
-
 ):
 
     if input_beam:
@@ -66,6 +64,11 @@ def regrid_spectral_cube(
 
             input_lon_grid = coords.icrs.ra.deg
             input_lat_grid = coords.icrs.dec.deg
+
+        elif target_frame == 'fk5':
+
+            input_lon_grid = coords.fk5.ra.deg
+            input_lat_grid = coords.fk5.dec.deg
 
         elif target_frame == 'galactic':
 
@@ -446,12 +449,34 @@ def fix_dim(dim, hdul_inp):
 
         hdul_out[0].header['NAXIS']=2
 
+
+    elif (dim==1):
+        map=np.zeros([len(hdul_inp[0].data[0,0,:,0]),len(hdul_inp[0].data[0,0,0,:])])
+        hdu_out = fits.PrimaryHDU(map)
+        hdul_out = fits.HDUList([hdu_out])
+        hdul_out[0].header=copy.deepcopy(hdul_inp[0].header)
+
+        hdul_out[0].data=copy.deepcopy(hdul_inp[0].data[0,0,0,:])
+
+        # remove 4d and 3d attributes from header
+        for attribute in list(hdul_out[0].header.keys()):
+            if not (attribute == ''):
+                if (attribute[-1] == '4') or (attribute[-1] == '3') or (attribute[-1] == '2'):
+                    del hdul_out[0].header[attribute]
+
+        hdul_out[0].header['NAXIS']=1
+        hdul_out[0].header['RA'] = astrokit.get_axis(2, hdul_inp)[0]
+        hdul_out[0].header['DEC'] = astrokit.get_axis(3, hdul_inp)[0]
+
+
     return hdul_out
 
-def extract_subcube(hdul_inp,
-                    pos_cent,
-                    width,
-                    height):
+def extract_subcube(
+    hdul_inp,
+    pos_cent,
+    width,
+    height
+):
 
     # header information for axis = 1,2
     axis_len = np.zeros(2, dtype=int)
@@ -546,9 +571,11 @@ def extract_subcube(hdul_inp,
 
     return hdul_extract
 
-def chop_edges(input_hdul,
-               pix_ax1,
-               pix_ax2):
+def chop_edges(
+    input_hdul,
+    pix_ax1,
+    pix_ax2
+):
 
     input_dim = input_hdul[0].header['NAXIS']
 
@@ -604,7 +631,10 @@ def chop_edges(input_hdul,
 
     return output_hdul
 
-def resample(hdul_inp, vel_res):
+def resample_cube(
+    hdul_inp,
+    vel_res
+):
 
     hdul_inp[0].data=np.nan_to_num(hdul_inp[0].data)
 
@@ -627,7 +657,6 @@ def resample(hdul_inp, vel_res):
     hdul_out = fits.HDUList([hdu])
     hdul_out[0].header = copy.deepcopy(hdul_inp[0].header)
 
-
     hdul_out[0].header["NAXIS3"] = axis_len_out
     hdul_out[0].header["CDELT3"] = step_size_out
     hdul_out[0].header["CRVAL3"] = vel_out[0] - (1. - ref_pos_inp) * step_size_out
@@ -640,7 +669,6 @@ def resample(hdul_inp, vel_res):
 
         for idx_inp in range(axis_len_inp):
 
-
             idx_out = int(round((vel_inp[idx_inp]-vel_out[0])/step_size_out))
 
             #print("idx_out: " + str(idx_out))
@@ -649,85 +677,99 @@ def resample(hdul_inp, vel_res):
 
             weight[idx_out] += 1
 
-
         for idx_out in range(axis_len_out):
 
             hdul_out[0].data[idx_out,:,:] = hdul_out[0].data[idx_out,:,:]/ weight[idx_out]
 
-
     return hdul_out
 
-def empty_grid(grid_ax1 = None,
-               grid_ax2 = None,
-               grid_ax3 = None,
-               ref_value_ax1 = None,
-               ref_value_ax2 = None,
-               ref_value_ax3 = None,
-               beam_maj = None,
-               beam_min = None,
-               CTYPE1 = 'RA---GLS',
-               CTYPE2 = 'DEC--GLS',
-               CTYPE3 = 'VRAD',
-               EQUINOX = 2000):
+def empty_grid(
+    AXVAL1 = None, # values of the first axis
+    AXVAL2 = None, # values of the second axis
+    AXVAL3 = None, # values of the third axis
+    CRVAL1 = None, # reference value of the first axis
+    CRVAL2 = None, # reference value of the second axis
+    CRVAL3 = None, # reference value of the third axis
+    BMAJ = None, # Beam major axis
+    BMIN = None, # Beam minor axis
+    CTYPE1 = 'RA---GLS', # units of the first axis
+    CTYPE2 = 'DEC--GLS', # units of the second axis
+    CTYPE3 = 'VRAD', # units of the third axis
+    RADESYS = 'FK5', # Coordinate reference frame of major/minor axes
+    SPECSYS = 'LSRK',
+    EQUINOX = 2000, # Equinox of selected coordinate reference frame
+    BUNIT = None, # units of the map/cube
+    LINE = None, # observed line
+):
 
-    len_ax1 = len(grid_ax1)
-    len_ax2 = len(grid_ax2)
+    NAXIS1 = len(AXVAL1) # number of entries in the first axis
+    NAXIS2 = len(AXVAL2) # number of entries in the second axis
 
-    if ref_value_ax3 or ref_value_ax3 == 0:
+    if CRVAL3 is not None:
 
-        len_ax3 = len(grid_ax3)
+        NAXIS3 = len(AXVAL3)
 
-        cube_size = np.zeros([len_ax3, len_ax2, len_ax1])
+        grid = np.zeros([NAXIS3, NAXIS2, NAXIS1])
 
     else:
 
-        cube_size = np.zeros([len_ax2, len_ax1])
+        grid = np.zeros([NAXIS2, NAXIS1])
 
-    hdu = fits.PrimaryHDU(cube_size)
+    hdu = fits.PrimaryHDU(grid)
     output_hdul = fits.HDUList([hdu])
 
     # step size of axis
-    step_size_ax1   = grid_ax1[1] - grid_ax1[0]
-
-    # value of reference grid position of axis
-    ref_value_ax1   = ref_value_ax1
+    CDELT1   = AXVAL1[1] - AXVAL1[0] # step size of the first axis
 
     # step size of axis
-    step_size_ax2   = grid_ax2[1] - grid_ax2[0]
-
-    # value of reference grid position of axis
-    ref_value_ax2   = ref_value_ax2
+    CDELT2   = AXVAL2[1] - AXVAL2[0] # step size of the second axis
 
     output_hdul[0].header["CTYPE1"] = CTYPE1
-    output_hdul[0].header["NAXIS1"] = len_ax1
-    output_hdul[0].header["CDELT1"] = step_size_ax1
-    output_hdul[0].header["CRVAL1"] = ref_value_ax1
-    output_hdul[0].header["CRPIX1"] = 1. - (grid_ax1[0] - ref_value_ax1)/step_size_ax1
+    output_hdul[0].header["NAXIS1"] = NAXIS1
+    output_hdul[0].header["CDELT1"] = CDELT1
+    output_hdul[0].header["CRVAL1"] = CRVAL1
+    output_hdul[0].header["CRPIX1"] = 1. - (AXVAL1[0] - CRVAL1)/CDELT1
 
     output_hdul[0].header["CTYPE2"] = CTYPE2
-    output_hdul[0].header["NAXIS2"] = len_ax2
-    output_hdul[0].header["CDELT2"] = step_size_ax2
-    output_hdul[0].header["CRVAL2"] = ref_value_ax2
-    output_hdul[0].header["CRPIX2"] = 1. - (grid_ax2[0] - ref_value_ax2)/step_size_ax2
+    output_hdul[0].header["NAXIS2"] = NAXIS2
+    output_hdul[0].header["CDELT2"] = CDELT2
+    output_hdul[0].header["CRVAL2"] = CRVAL2
+    output_hdul[0].header["CRPIX2"] = 1. - (AXVAL2[0] - CRVAL2)/CDELT2
 
-    output_hdul[0].header["BMAJ"] = beam_maj
-    output_hdul[0].header["BMIN"] = beam_min
 
-    output_hdul[0].header["EQUINOX"] = EQUINOX
+    if EQUINOX is not None:
+        output_hdul[0].header["EQUINOX"] = EQUINOX
 
-    if ref_value_ax3 or ref_value_ax3 == 0:
+    if BMAJ is not None:
+
+        output_hdul[0].header["BMAJ"] = BMAJ
+
+    if BMIN is not None:
+
+        output_hdul[0].header["BMIN"] = BMIN
+
+    if BUNIT is not None:
+
+        output_hdul[0].header["BUNIT"] = BUNIT
+
+    if LINE is not None:
+
+        output_hdul[0].header["LINE"] = LINE
+
+    if SPECSYS is not None:
+
+        output_hdul[0].header["SPECSYS"] = SPECSYS
+
+    if CRVAL3 is not None:
 
         # step size of axis
-        step_size_ax3   = grid_ax3[1] - grid_ax3[0]
-
-        # value of reference grid position of axis
-        ref_value_ax3   = ref_value_ax3
+        CDELT3   = AXVAL3[1] - AXVAL3[0]
 
         output_hdul[0].header["CTYPE3"] = CTYPE3
-        output_hdul[0].header["NAXIS3"] = len_ax3
-        output_hdul[0].header["CDELT3"] = step_size_ax3
-        output_hdul[0].header["CRVAL3"] = ref_value_ax3
-        output_hdul[0].header["CRPIX3"] = 1. - (grid_ax3[0] - ref_value_ax3)/step_size_ax3
+        output_hdul[0].header["NAXIS3"] = NAXIS3
+        output_hdul[0].header["CDELT3"] = CDELT3
+        output_hdul[0].header["CRVAL3"] = CRVAL3
+        output_hdul[0].header["CRPIX3"] = 1. - (AXVAL3[0] - CRVAL3)/CDELT3
 
     return output_hdul
 
@@ -1026,3 +1068,39 @@ def swap_cube_axis(
     output_cube[0].header['CDELT3'] = output_cube[0].header['CDELT3']*1e3
 
     return output_cube
+
+
+def flip_axis(
+
+    axis,
+    cube_inp,
+
+):
+
+    cube_flip = astrokit.zeros_cube(cube_inp)
+
+    len_ra = cube_flip[0].header['NAXIS1']
+    len_dec = cube_flip[0].header['NAXIS2']
+
+    for ra in range(len_ra):
+        for dec in range(len_dec):
+
+            if axis == 3:
+
+                cube_flip[0].data[:, dec, ra] = np.flip(cube_inp[0].data[:, dec, ra])
+
+
+    if axis == 3:
+
+        axis = 3
+        vel_inp = astrokit.get_axis(axis, cube_inp)
+
+        cube_flip[0].header['CRPIX3'] = 0.
+        cube_flip[0].header['CDELT3'] = -cube_inp[0].header['CDELT3']
+        cube_flip[0].header['CRVAL3'] = vel_inp[-1]-cube_flip[0].header['CDELT3']
+
+    else:
+
+        print('error: not yet implemented')
+
+    return cube_flip

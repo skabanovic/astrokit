@@ -44,19 +44,33 @@ from astrokit.math import curve
 #
 #############################################################
 
-def get_axis(axis, hdul):
+def get_axis(
+    axis, 
+    hdul,
+    hdul_idx = 0,
+    hdul_axis = "NAXIS",
+    freq2vel = False,
+    ):
 
     #length of cube axis
-    axis_len    = hdul[0].header["NAXIS" + str(axis)]
+    axis_len    = hdul[hdul_idx].header[hdul_axis + str(axis)]
 
     # reference grid position of axis
-    ref_pos     = hdul[0].header["CRPIX" + str(axis)]
+    ref_pos     = hdul[hdul_idx].header["CRPIX" + str(axis)]
 
-    # step size of axis
-    step_size   = hdul[0].header["CDELT" + str(axis)]
+    if freq2vel:
 
-    # value of reference grid position of axis
-    ref_value   = hdul[0].header["CRVAL" + str(axis)]
+        step_size =  hdul[hdul_idx].header["DELTAV"]
+
+        ref_value   = hdul[hdul_idx].header["VELO-LSR"]
+
+    else:
+
+        # step size of axis
+        step_size   = hdul[hdul_idx].header["CDELT" + str(axis)]
+
+        # value of reference grid position of axis
+        ref_value   = hdul[hdul_idx].header["CRVAL" + str(axis)]
 
     # determine the grid axis points
     grid_axis = (np.arange(1, axis_len+1) - ref_pos) * step_size + ref_value
@@ -77,8 +91,11 @@ def get_axis(axis, hdul):
 #
 #############################################################
 
-def get_idx(grid_pos, grid_axis, method = 'lower'):
-
+def get_idx(
+    grid_pos,
+    grid_axis,
+    method = 'lower'
+):
     # determines the reference position,
     # which is the first value of the grid
     grid_ref  = grid_axis[0]
@@ -88,7 +105,7 @@ def get_idx(grid_pos, grid_axis, method = 'lower'):
 
     # determies the distance of the given grid position to the
     # reference position
-    rel_pos   = grid_pos-grid_ref
+    rel_pos   = grid_pos - grid_ref
 
     # determines the index of the grid point on the given grid axis
     if method == 'lower':
@@ -357,13 +374,20 @@ def channel_map(hdul, ch_min, ch_max, ch_res = 1, unit = 'channel'):
 #
 #############################################################
 
-def moment_N(order, hdul, noise_level = 0):
+def moment_N(
+    order,
+    hdul,
+    noise_level = 0,
+    use_axis = True
+):
 
     moment_0 = astrokit.zeros_map(hdul)
 
     # determine velocity axis
     grid_axis=3
     vel = get_axis(grid_axis, hdul)/1e3
+
+    dv = abs(vel[1]- vel[0])
 
     if order > 0:
 
@@ -374,8 +398,20 @@ def moment_N(order, hdul, noise_level = 0):
     for idx_dec in range(len(moment_0[0].data[:,0])):
         for idx_ra in range(len(moment_0[0].data[0,:])):
 
-            moment_0[0].data[idx_dec, idx_ra]=\
-            np.trapz(hdul[0].data[:, idx_dec, idx_ra], vel[:])
+
+            if use_axis:
+                moment_0[0].data[idx_dec, idx_ra] = np.trapz(
+                    hdul[0].data[:, idx_dec, idx_ra],
+                    x = vel[:]
+                )
+
+            else:
+
+                moment_0[0].data[idx_dec, idx_ra] = np.trapz(
+                    hdul[0].data[:, idx_dec, idx_ra],
+                    dx = dv
+                )
+
 
             moment_min = noise_level
 
@@ -388,8 +424,16 @@ def moment_N(order, hdul, noise_level = 0):
                 moment_wei = hdul[0].data[:,idx_dec, idx_ra]*vel[:]
 
                 # determine moment 1
-                moment_1[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, vel)\
-                                                 / moment_0[0].data[idx_dec, idx_ra]
+
+                if use_axis:
+
+                    moment_1[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, x = vel)\
+                                                    / moment_0[0].data[idx_dec, idx_ra]
+
+                else:
+
+                    moment_1[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, dx = dv)\
+                                                    / moment_0[0].data[idx_dec, idx_ra]
 
                 if order > 1:
                     # determine moment N weight
@@ -397,10 +441,14 @@ def moment_N(order, hdul, noise_level = 0):
                                * (vel[:] - moment_1[0].data[idx_dec, idx_ra])**order
 
 
-                    # determine moment N
-                    moment_N[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, vel)\
-                                                     / moment_0[0].data[idx_dec, idx_ra]
+                    if use_axis:
+                        # determine moment N
+                        moment_N[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, x=vel)\
+                                                         / moment_0[0].data[idx_dec, idx_ra]
+                    else:
 
+                        moment_N[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, dx=dv)\
+                                                         / moment_0[0].data[idx_dec, idx_ra]
                 #else:
                 #
                 #        moment_1[0].data[idx_dec, idx_ra] = np.nan
@@ -432,25 +480,109 @@ def moment_N(order, hdul, noise_level = 0):
 #
 #############################################################
 
-def histogram(grid, hdul):
+def histogram(
+    grid,
+    hdul,
+    input_shape='map'
+    ):
 
     pixel_count = np.zeros([len(grid)])
 
     idx_max = len(grid)-1
     idx_min = 0
 
-    for dec in range(len(hdul[0].data[:,0])):
-        for ra in range(len(hdul[0].data[0,:])):
-            if not (np.isnan(hdul[0].data[dec,ra])
-                    or np.isinf(hdul[0].data[dec,ra])
-                    or hdul[0].data[dec,ra]==0):
+    if input_shape == 'map':
+        for dec in range(len(hdul[0].data[:,0])):
+            for ra in range(len(hdul[0].data[0,:])):
+                if not (np.isnan(hdul[0].data[dec,ra])
+                        or np.isinf(hdul[0].data[dec,ra])
+                        or hdul[0].data[dec,ra]==0):
 
-                idx = get_idx(hdul[0].data[dec,ra], grid)
+                    idx = get_idx(hdul[0].data[dec,ra], grid)
 
-                if (( idx < idx_max) & (idx >= idx_min)):
-                    pixel_count[idx] += 1
+                    if (( idx < idx_max) & (idx >= idx_min)):
+                        pixel_count[idx] += 1
+
+    elif input_shape == 'list':
+
+        for item in hdul:
+
+            idx = get_idx(item, grid)
+
+            if (( idx < idx_max) & (idx >= idx_min)):
+                pixel_count[idx] += 1
 
     return pixel_count
+
+
+def histogram2d(
+
+    map_1,
+    map_2,
+    axis_1,
+    axis_2,
+    method = 'closer',
+    remove_nan = True
+):
+    
+    flatten_map_1 = map_1[0].data.flatten()
+    flatten_map_2 = map_2[0].data.flatten()
+    
+    
+    if remove_nan:
+    
+        flatten_map_1 = flatten_map_1[~np.isnan(flatten_map_1)]
+        flatten_map_2 = flatten_map_2[~np.isnan(flatten_map_2)]
+        
+    else:
+        
+        flatten_map_1 = np.nan_to_num(flatten_map_1)
+        flatten_map_2 = np.nan_to_num(flatten_map_2)
+
+    
+    len_ax1 = len(axis_1)
+    len_ax2 = len(axis_2)
+    
+    len_data = len(flatten_map_1)
+    
+    density_grid = np.zeros([len_ax1, len_ax2])
+    
+    for data in range(len_data):
+        
+        
+        idx_ax1 = astrokit.get_idx(
+            flatten_map_1[data], 
+            axis_1, 
+            method = method)
+        
+        #if flatten_map_1[data] > 0.6:
+            
+        #    print(flatten_map_1[data])
+        #    print(idx_ax1)
+            
+        idx_ax2 = astrokit.get_idx(
+            flatten_map_2[data], 
+            axis_2, 
+            method = method)
+
+        idx_ax1_min = 0
+        idx_ax1_max = len(axis_1)
+        
+        idx_ax2_min = 0
+        idx_ax2_max = len(axis_2)
+        
+        if ((idx_ax1 > idx_ax1_min) 
+        and (idx_ax1 < idx_ax1_max)
+        and (idx_ax2 > idx_ax2_min)
+        and (idx_ax2 < idx_ax2_max)): 
+        
+            density_grid[idx_ax1, idx_ax2] = density_grid[idx_ax1, idx_ax2] + 1
+        
+    #density_grid[density_grid == 0] = np.nan    
+    
+    return density_grid
+        
+        
 
 #############################################################
 #
@@ -464,14 +596,19 @@ def histogram(grid, hdul):
 #
 #############################################################
 
-def chop_cube(vel_min, vel_max, hdul_inp):
+def chop_cube(
+    vel_min,
+    vel_max,
+    hdul_inp,
+):
 
     # determine velocity axis
     grid_axis=3
     vel = get_axis(grid_axis, hdul_inp)/1e3
 
     idx_min = get_idx(vel_min, vel, 'closer')
-    idx_max = get_idx(vel_max, vel, 'closer')+1
+    idx_max = get_idx(vel_max, vel, 'closer')+1 # the plus +1 is here to avoid: idx_min:(idx_max + 1)
+                                                # now we can simply write idx_min:idx_max
 
     empty_cube=np.zeros_like(hdul_inp[0].data[idx_min:idx_max,:,:])
     hdu_chop = fits.PrimaryHDU(empty_cube)
@@ -632,19 +769,23 @@ def rm_borders(hdul, wei_map, wei_min):
         hdul_new[0].data[idx_dec, wei_map[0].data<wei_min] = np.nan
     return hdul_new
 
-def noise_intensity(rms = None,
-                    vel_res = None,
-                    vel_min = 0,
-                    vel_max = 0,
-                    vel = None,
-                    spect = None,
-                    variable_rms = False):
+def noise_intensity(
+    
+    rms = None,
+    vel_res = None,
+    vel_min = 0,
+    vel_max = 0,
+    vel = None,
+    spect = None,
+    variable_rms = False
+    
+):
 
 
     if not vel_res:
         vel_res = abs(vel[1]-vel[0])
 
-    ch_num = (vel_max - vel_min)/vel_res + 1.
+    ch_num = (vel_max - vel_min)/vel_res # + 1.
 
     if variable_rms:
 
@@ -666,31 +807,55 @@ def noise_intensity(rms = None,
 
     return intensity
 
-def noise_intensity_map(vel_min, vel_max, hdul):
+def noise_intensity_map(
 
-    noise_map = astrokit.zeros_map(hdul)
+    vel_min = None, 
+    vel_max = None, 
+    vel_res = None,
+    spatral_cube = None,
+    rms_map = None,
+    
+):
 
-    axis=3
-    vel = get_axis(axis, hdul)/1e3
+    if spatral_cube is None:
 
-    vel_res = abs(vel[1]-vel[0])
+        noise_map = astrokit.zeros_map(rms_map)
 
-    len_ax1 = len(noise_map[0].data[:,0])
-    len_ax2 = len(noise_map[0].data[0,:])
+    else:
+
+        noise_map = astrokit.zeros_map(spatral_cube)
+
+        axis=3
+        vel = get_axis(axis, spatral_cube)/1e3
+        vel_res = abs(vel[1]-vel[0])
+
+    len_ax1 = len(noise_map[0].data[0,:])
+    len_ax2 = len(noise_map[0].data[:,0])
+    
 
     for idx1 in range(len_ax1):
         for idx2 in range(len_ax2):
 
 
-            rms = rms_spectrum(vel,
-                               hdul[0].data[:, idx1, idx2],
-                               window = None,
-                               rms_range = [vel_min, vel_max])
+            if rms_map is None:
 
-            noise_map[0].data[idx1, idx2] = noise_intensity(rms,
-                                                            vel_res,
-                                                            vel_min = vel_min,
-                                                            vel_max = vel_max)
+                rms = rms_spectrum(
+                    vel,
+                    spatral_cube[0].data[:, idx2, idx1],
+                    window = None,
+                    rms_range = [vel_min, vel_max]
+                )
+            
+            else:
+
+                rms = rms_map[0].data[idx2, idx1]
+
+            noise_map[0].data[idx2, idx1] = noise_intensity(
+                rms,
+                vel_res,
+                vel_min = vel_min,
+                vel_max = vel_max
+            )
 
     return noise_map
 
@@ -777,14 +942,16 @@ def average_cube(hdul_inp, weight = None):
 
     return spect_aver
 
-def average_volume(hdul_inp,
-                   pos,
-                   shape,
-                   radius = None,
-                   radius_2 = None,
-                   width = None,
-                   height = None,
-                   weight = None):
+def average_volume(
+    hdul_inp,
+    pos,
+    shape,
+    radius = None,
+    radius_2 = None,
+    width = None,
+    height = None,
+    weight = None
+):
 
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
@@ -838,16 +1005,20 @@ def average_volume(hdul_inp,
 
         if weight:
 
-            spect_aver[0].data = np.average(hdul_inp[0].data[:,idx_sig3[0, :], idx_sig3[1, :]],
-                                            weights = weight[0].data[idx_sig3[0, :], idx_sig3[1, :]],
-                                            axis = 1)
+            spect_aver[0].data = np.average(
+                hdul_inp[0].data[:,idx_sig3[0, :], idx_sig3[1, :]],
+                weights = weight[0].data[idx_sig3[0, :], idx_sig3[1, :]],
+                axis = 1
+            )
 
 
 
         else:
 
-            spect_aver[0].data = np.average(hdul_inp[0].data[:, idx_sig3[0, :], idx_sig3[1, :]],
-                                            axis = 1)
+            spect_aver[0].data = np.average(
+                hdul_inp[0].data[:, idx_sig3[0, :], idx_sig3[1, :]],
+                axis = 1
+            )
 
     else:
         print("error: no valid shape entered")
@@ -932,15 +1103,24 @@ def interp_spect(vel, line, vel_interp):
 
     return line_interp
 
-def average_spectra(spectra, wei):
+def average_spectra(
+    spectra, 
+    weight = None
+    ):
 
     aver_spect = np.zeros_like(spectra[0][:])
 
+    if weight is None:
+
+        weight = np.zeros(len(spectra))
+
+        weight[:] = 1.
+
     for line in range(len(spectra)):
 
-        aver_spect = aver_spect + spectra[line][:]*wei[line]
+        aver_spect = aver_spect + spectra[line][:]*weight[line]
 
-    aver_spect = aver_spect/np.sum(wei)
+    aver_spect = aver_spect/np.sum(weight)
 
     return aver_spect
 
@@ -1265,3 +1445,18 @@ def velocity_difference(hdul_1, hdul_2):
     vel_diff[0].data = hdul_1[0].data - hdul_2[0].data
 
     return vel_diff
+
+
+def norm_map(
+
+    map_inp,
+    norm
+):
+    
+    map_out = astrokit.zeros_map(map_inp)
+    
+    if norm == 'min-max':
+        
+        map_out[0].data = (map_inp[0].data - np.nanmin(map_inp[0].data))/(np.nanmax(map_inp[0].data) - np.nanmin(map_inp[0].data))
+        
+    return map_out

@@ -150,6 +150,30 @@ def galactic_carbon_ratio(dist, dist_err):
 
     return carbon_ratio, carbon_ratio_err
 
+
+def isotopic_ratio(
+
+    isotop_primary,
+    isotop_secondary,
+    rms_primary = None,
+    rms_secondary = None
+):
+
+    iso_ratio = isotop_primary/isotop_secondary
+
+    if rms_primary is not None:
+
+        error_term_1 = rms_primary/isotop_secondary
+        error_term_2 = rms_secondary*isotop_primary/isotop_secondary**2
+
+        iso_ratio_error = np.sqrt(error_term_1**2 + error_term_2**2)
+
+        return iso_ratio, iso_ratio_error
+
+    else:
+
+        return  iso_ratio
+
 def tau_ratio_eq(tau, iso_ratio, ratio_norm, obs_ratio):
 
     return ((1.-np.exp(-tau))/tau - (ratio_norm/iso_ratio)*obs_ratio)

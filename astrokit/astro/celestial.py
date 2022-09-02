@@ -202,24 +202,32 @@ def uv_luminosity(temp, lum):
 
     for star in range(num_star):
 
-        wav_max  = np.log10(2897.8e-4/temp[star])
-        wav_st = wav_max-2
-        wav_end = wav_max+2
-        wav_step = (wav_end-wav_st)/1e6
+        #wav_max  = np.log10(2897.8e-4/temp[star])
+        #wav_st = wav_max-2
+        #wav_end = wav_max+2
+        #wav_step = (wav_end-wav_st)/1e6
 
-        wav = np.arange(wav_st, wav_end, wav_step)
-        flux = astrokit.black_body(
-            wav,
-            temp[star],
-            input_unit='wavelength',
-            system_of_units = 'cgs',
-            input_scale = 'log10'
-            )
+        #wav = np.arange(wav_st, wav_end, wav_step)
+        #flux = astrokit.black_body(
+        #    wav,
+        #    temp[star],
+        #    input_unit='wavelength',
+        #    system_of_units = 'cgs',
+        #    input_scale = 'log10'
+        #    )
 
-        integ_flux = np.trapz(flux, wav)
+        #integ_flux = np.trapz(flux, 10**wav)
+        #print(integ_flux*1e-15)
+
+        integ_flux_const = 2*np.pi**4*const.k_B.cgs.value**4/15./const.h.cgs.value**3/const.c.cgs.value**2
+
+        integ_flux = integ_flux_const * temp[star]**4
+
+        #print(integ_flux*1e-15)
 
         wav_st = np.log10(910e-8)
         wav_end = np.log10(2066e-8)
+        wav_step = (wav_end - wav_st)/1e6
 
         wav_uv = np.arange(wav_st, wav_end, wav_step)
 
@@ -231,7 +239,9 @@ def uv_luminosity(temp, lum):
             input_scale = 'log10'
             )
 
-        integ_flux_uv = np.trapz(flux_uv, wav_uv)
+        integ_flux_uv = np.trapz(flux_uv, 10**wav_uv)
+
+        #print(integ_flux_uv*1e-15)
 
         uv_lum[star] = (integ_flux_uv/integ_flux)*lum[star]
 
