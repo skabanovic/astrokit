@@ -63,9 +63,17 @@ def gauss_multi(ax, *param):
 def exp_func(ax, amp, var, off):
     return amp*np.exp(-var*ax)+off
 
-def wing_fit(ax, amp, ax_0, width, freq_offset, amp_scaling):
+def wing_fit(line_shift, line_ratio, ratio_norm, vel, *param):
 
-    wing_profile = gauss(ax, amp*amp_scaling, ax_0-freq_offset, width)+gauss(ax, amp, ax_0, width)
+    wing_profile = np.zeros_like(vel)
+
+    for comp in range(0, len(param), 3):
+
+        amp    = param[comp]
+        vel_0  = param[comp+1]
+        width  = param[comp+2]
+
+        wing_profile = wing_profile + gauss(vel, amp*(line_ratio/ratio_norm), vel_0-line_shift, width) + gauss(vel, amp, vel_0, width)
 
     return wing_profile
 

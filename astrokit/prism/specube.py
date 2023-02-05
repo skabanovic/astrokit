@@ -288,7 +288,13 @@ def cube_integral(vel_min, vel_max, hdul_inp):
     return map_intg
 
 
-def channel_map(hdul, ch_min, ch_max, ch_res = 1, unit = 'channel'):
+def channel_map(
+    hdul, 
+    ch_min, 
+    ch_max, 
+    ch_res = 1, 
+    unit = 'channel'
+):
 
     # make an empty 2d grid with the same spatial
     # size as the input cube
@@ -335,19 +341,24 @@ def channel_map(hdul, ch_min, ch_max, ch_res = 1, unit = 'channel'):
             vel_min = ch_min+(ch_res*idx_map)
             vel_max = ch_min+(ch_res*(idx_map+1))
 
-            ch_num = int((vel_max-vel_min)/(hdul[0].header["CDELT3"]/1.0e3))
+            vel_res = hdul[0].header["CDELT3"]/1.0e3
 
-            if ch_num == 0:
+            check_num = (vel_max-vel_min)/vel_res
+
+            if check_num <= 1:
 
                 ch_vel = [[vel_min, vel_max]]
 
             else:
 
-                vel_res = (vel_max - vel_min)/ch_num
+                ch_num = round((vel_max-vel_min)/vel_res+0.49)
+                vel_res_new = (vel_max - vel_min)/(ch_num + 1)
+                ch_vel = np.arange(vel_min, vel_max+vel_res, vel_res_new)
 
-                ch_vel = np.arange(vel_min, vel_max, vel_res)
-
-                ch_vel = np.append(ch_vel, vel_max)
+                # ch_num = int((vel_max-vel_min)/vel_res)
+                # vel_res = (vel_max - vel_min)/ch_num
+                # ch_vel = np.arange(vel_min, vel_max, vel_res)
+                # ch_vel = np.append(ch_vel, vel_max)
 
             for idx_dec in range(len(map_intg[0].data[:,0])):
                 for idx_ra in range(len(map_intg[0].data[0,:])):
@@ -375,86 +386,36 @@ def channel_map(hdul, ch_min, ch_max, ch_res = 1, unit = 'channel'):
 #############################################################
 
 def moment_N(
+
     order,
-    hdul,
-    noise_level = 0,
-    use_axis = True
+    spect,
+    vel,
+
 ):
 
-    moment_0 = astrokit.zeros_map(hdul)
-
-    # determine velocity axis
-    grid_axis=3
-    vel = get_axis(grid_axis, hdul)/1e3
-
-    dv = abs(vel[1]- vel[0])
+    moment_0 = np.trapz(
+        spect,
+        x = vel
+    )
 
     if order > 0:
 
-        moment_1 = astrokit.zeros_map(hdul)
-        moment_N = astrokit.zeros_map(hdul)
+        # determine weighted velocity
+        moment_wei = spect*vel
 
-    # determine moment 0 and 1
-    for idx_dec in range(len(moment_0[0].data[:,0])):
-        for idx_ra in range(len(moment_0[0].data[0,:])):
-
-
-            if use_axis:
-                moment_0[0].data[idx_dec, idx_ra] = np.trapz(
-                    hdul[0].data[:, idx_dec, idx_ra],
-                    x = vel[:]
-                )
-
-            else:
-
-                moment_0[0].data[idx_dec, idx_ra] = np.trapz(
-                    hdul[0].data[:, idx_dec, idx_ra],
-                    dx = dv
-                )
+        # determine moment 1
+        moment_1 = np.trapz(moment_wei, x = vel)/moment_0
 
 
-            moment_min = noise_level
+    if order > 1:
+                    
+        # determine moment N weight
+        moment_wei =  spect * (vel - moment_1)**order
 
-            if (order>0):
+        # determine moment N
+        moment_N = np.trapz(moment_wei, x=vel)/moment_0
+                    
 
-                #if not np.isnan(moment_0[0].data[idx_dec,idx_ra])\
-                #and (abs(moment_0[0].data[idx_dec,idx_ra])>moment_min):
-
-                # determine weighted velocity
-                moment_wei = hdul[0].data[:,idx_dec, idx_ra]*vel[:]
-
-                # determine moment 1
-
-                if use_axis:
-
-                    moment_1[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, x = vel)\
-                                                    / moment_0[0].data[idx_dec, idx_ra]
-
-                else:
-
-                    moment_1[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, dx = dv)\
-                                                    / moment_0[0].data[idx_dec, idx_ra]
-
-                if order > 1:
-                    # determine moment N weight
-                    moment_wei =  hdul[0].data[:, idx_dec, idx_ra] \
-                               * (vel[:] - moment_1[0].data[idx_dec, idx_ra])**order
-
-
-                    if use_axis:
-                        # determine moment N
-                        moment_N[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, x=vel)\
-                                                         / moment_0[0].data[idx_dec, idx_ra]
-                    else:
-
-                        moment_N[0].data[idx_dec,idx_ra] = np.trapz(moment_wei, dx=dv)\
-                                                         / moment_0[0].data[idx_dec, idx_ra]
-                #else:
-                #
-                #        moment_1[0].data[idx_dec, idx_ra] = np.nan
-                #        moment_N[0].data[idx_dec, idx_ra] = np.nan
-
-    # determine moment N
     if order == 0:
 
         return moment_0
@@ -466,6 +427,35 @@ def moment_N(
     else:
 
         return moment_N
+
+
+
+def moment_map(
+    order,
+    cube,
+    vel = None
+):
+
+    map_moment_N = astrokit.zeros_map(cube)
+
+    if vel is None:
+
+        # determine velocity axis
+        grid_axis=3
+        vel = get_axis(grid_axis, cube)/1e3
+    
+
+    # determine moment 0 and 1
+    for dec in range(len(map_moment_N[0].data[:,0])):
+        for ra in range(len(map_moment_N[0].data[0,:])):
+
+            map_moment_N[0].data[dec, ra] = moment_N(
+                order, 
+                cube[0].data[:, dec, ra],
+                vel = vel
+            )
+
+    return map_moment_N
 
 #############################################################
 #
@@ -693,6 +683,19 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
         rms_noise = np.sqrt(sum(spect[idx_min:idx_max]**2)/(len(spect[idx_min:idx_max])-np.sum(num_of_zeros)))
 
     return rms_noise
+
+def rms_13cii(
+
+    rms_12cii
+):
+
+    norm_f21 = 0.625 
+    norm_f10 = 0.25 
+    norm_f11 = 0.125
+
+    rms_norm = np.sqrt(norm_f21**2 + norm_f10**2 + norm_f11**2) 
+
+    return rms_12cii/rms_norm
 
 def rms_map(hdul, window=None, rms_range=None):
 
@@ -1301,67 +1304,74 @@ def pi_diagram(
 
 
 def pv_diagram(
-    path,
-    hdul,
+    path_deg,
+    cube_inp,
     kernel_size = None,
     path_dist = None,
+    CTYPE1 = 'RA--deg',
+    path_idx = 0
 ):
 
     #spectra=np.zeros([len(path[0,:]),len(hdul[0].data[:,0,0])])
 
     axis=3
-    vel = get_axis(axis, hdul)/1e3
+    vel = astrokit.get_axis(axis, cube_inp)/1e3
 
-    diagram_size = np.zeros([len(vel), len(path_dist)])
+    diagram_size = np.zeros([len(vel), len(path_deg[0, :])])
     hdu = fits.PrimaryHDU(diagram_size)
-    empty_diagram = fits.HDUList([hdu])
+    diagram_out = fits.HDUList([hdu])
 
-    empty_diagram[0].header['NAXIS1'] = len(path)
-
-    ref_pos = 0.
+    diagram_out[0].header['NAXIS1'] = len(path_deg)
+    
+    #print(diagram_out[0].shape)
 
     if path_dist is None:
 
-        step_size = np.sqrt((path[0, 1] - path[0, 0])**2+(path[1, 1] - path[1, 0]))
+        ref_pos = path_deg[path_idx, int(len(path_deg)/2)]
+        
+        step_size = np.sqrt((path_deg[0, 1] - path_deg[0, 0])**2+(path_deg[1, 1] - path_deg[1, 0]))
 
-        empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
-        empty_diagram[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
-        empty_diagram[0].header['CDELT1'] = step_size
-        empty_diagram[0].header['CRPIX1'] = ref_pos
+        diagram_out[0].header['CTYPE1'] = CTYPE1
+        diagram_out[0].header['CRVAL1'] = path_deg[path_idx, 0] - (1. - ref_pos) * step_size
+        diagram_out[0].header['CDELT1'] = step_size
+        diagram_out[0].header['CRPIX1'] = ref_pos
 
     else:
+        
+        ref_pos = 0.
+        
         step_size = path_dist[1]-path_dist[0]
 
-        empty_diagram[0].header['CTYPE1'] = 'DIST--pc'
-        empty_diagram[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
-        empty_diagram[0].header['CDELT1'] = step_size
-        empty_diagram[0].header['CRPIX1'] = ref_pos
+        diagram_out[0].header['CTYPE1'] = 'DIST--pc'
+        diagram_out[0].header['CRVAL1'] = path_dist[0] - (1. - ref_pos) * step_size
+        diagram_out[0].header['CDELT1'] = step_size
+        diagram_out[0].header['CRPIX1'] = ref_pos
 
-    empty_diagram[0].header['NAXIS1'] = hdul[0].header['NAXIS1']
-    empty_diagram[0].header['CTYPE2'] = hdul[0].header['CTYPE3']
-    empty_diagram[0].header['CRVAL2'] = hdul[0].header['CRVAL3']
-    empty_diagram[0].header['CDELT2'] = hdul[0].header['CDELT3']
-    empty_diagram[0].header['CRPIX2'] = hdul[0].header['CRPIX3']
+    diagram_out[0].header['NAXIS1'] = cube_inp[0].header['NAXIS1']
+    diagram_out[0].header['CTYPE2'] = cube_inp[0].header['CTYPE3']
+    diagram_out[0].header['CRVAL2'] = cube_inp[0].header['CRVAL3']
+    diagram_out[0].header['CDELT2'] = cube_inp[0].header['CDELT3']
+    diagram_out[0].header['CRPIX2'] = cube_inp[0].header['CRPIX3']
 
-    empty_diagram[0].header['OBJECT'] = hdul[0].header['OBJECT']
-    empty_diagram[0].header['LINE'] = hdul[0].header['LINE']
+    diagram_out[0].header['OBJECT'] = cube_inp[0].header['OBJECT']
+    diagram_out[0].header['LINE'] = cube_inp[0].header['LINE']
 
     if kernel_size is None:
 
         # use as default 0.5*beam-size
-        kernel_size = ((hdul[0].header["BMAJ"]+hdul[0].header["BMIN"])/4.)
+        kernel_size = ((cube_inp[0].header["BMAJ"] + cube_inp[0].header["BMIN"])/4.)
 
     else:
 
         kernel_size = kernel_size/3600.
 
 
-    grid2d_ax1, grid2d_ax2 = get_grid(hdul)
+    grid2d_ax1, grid2d_ax2 = astrokit.get_grid(cube_inp)
 
-    for pos in range(len(path[0,:])):
+    for pos in range(len(path_deg[0, :])):
 
         # determie the distance from the line points to every grid point
-        grid2d_r=np.sqrt((grid2d_ax2-path[1, pos])**2+((grid2d_ax1-path[0, pos])*np.cos(path[1, pos]*np.pi/180.))**2)
+        grid2d_r=np.sqrt((grid2d_ax2-path_deg[1, pos])**2+((grid2d_ax1-path_deg[0, pos])*np.cos(path_deg[1, pos]*np.pi/180.))**2)
 
         # define relativ radius (3*sigma ~ 3* fwhm )
         sig3_r = 3.* kernel_size
@@ -1377,20 +1387,21 @@ def pv_diagram(
 
             weight=curve.gauss_2d(
                 kernel_size,
-                path[0,pos], path[1,pos],
+                path_deg[0,pos], path_deg[1,pos],
                 grid2d_ax1[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]],
                 grid2d_ax2[idx_sig3[0, idx_beam], idx_sig3[1, idx_beam]]
             )
 
-            empty_diagram[0].data[:, pos] = empty_diagram[0].data[:, pos]+\
-            hdul[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]*weight
+            
+            diagram_out[0].data[:, pos] = diagram_out[0].data[:, pos]+\
+            cube_inp[0].data[:,idx_sig3[0,idx_beam],idx_sig3[1,idx_beam]]*weight
 
             weight_sum=weight_sum+weight
 
 
-        empty_diagram[0].data[:, pos] = empty_diagram[0].data[:, pos]/weight_sum
+        diagram_out[0].data[:, pos] = diagram_out[0].data[:, pos]/weight_sum
 
-    return empty_diagram
+    return diagram_out
 
 def correlation_velocity(hdul_i, hdul_ii):
 

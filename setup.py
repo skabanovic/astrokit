@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='astrokit',
-    version='1.0',
+    version='0.1',
     description='toolkit for astro data ',
     author='Slawa Kabanovic',
     author_email='kabanovic@ph1.uni-koeln.de',

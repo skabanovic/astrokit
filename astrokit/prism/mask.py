@@ -24,6 +24,8 @@ from astropy.coordinates import Angle
 
 from reproject import reproject_interp, reproject_adaptive
 
+from IPython import display
+
 import cygrid
 
 def regrid_spectral_cube(
@@ -471,11 +473,14 @@ def fix_dim(dim, hdul_inp):
 
     return hdul_out
 
+
 def extract_subcube(
     hdul_inp,
     pos_cent,
     width,
-    height
+    height,
+    attribute_ax1_delta = 'CDELT1',
+    attribute_ax2_delta = 'CDELT2'
 ):
 
     # header information for axis = 1,2
@@ -493,8 +498,8 @@ def extract_subcube(
     idx_ax2 = np.zeros(2, dtype=int)
 
     # determine step size of the grid
-    step_size[0] = hdul_inp[0].header["CDELT1"]
-    step_size[1] = hdul_inp[0].header["CDELT2"]
+    step_size[0] = hdul_inp[0].header[attribute_ax1_delta]
+    step_size[1] = hdul_inp[0].header[attribute_ax2_delta]
 
     # determine the reference value of the grid
     ref_value[0] = hdul_inp[0].header["CRVAL1"]
@@ -560,9 +565,9 @@ def extract_subcube(
     hdul_extract[0].header["CRPIX2"] = ref_pos[1]
 
     # step size of axis
-    hdul_extract[0].header["CDELT1"] = step_size[0]
+    hdul_extract[0].header[attribute_ax1_delta] = step_size[0]
 
-    hdul_extract[0].header["CDELT2"] = step_size[1]
+    hdul_extract[0].header[attribute_ax2_delta] = step_size[1]
 
     # value of reference grid position of axis
     hdul_extract[0].header["CRVAL1"] = ref_value[0]
@@ -574,7 +579,9 @@ def extract_subcube(
 def chop_edges(
     input_hdul,
     pix_ax1,
-    pix_ax2
+    pix_ax2,
+    attribute_ax1_delta = 'CDELT1',
+    attribute_ax2_delta = 'CDELT2'
 ):
 
     input_dim = input_hdul[0].header['NAXIS']
@@ -608,13 +615,13 @@ def chop_edges(
         output_hdul[0].header['NAXIS1'] = len(output_hdul[0].data[0,:])
 
     # step size of axis
-    step_size_ax1   = output_hdul[0].header['CDELT1']
+    step_size_ax1   = output_hdul[0].header[attribute_ax1_delta]
 
     # value of reference grid position of axis
     ref_value_ax1   = output_hdul[0].header['CRVAL1']
 
     # step size of axis
-    step_size_ax2   = output_hdul[0].header['CDELT2']
+    step_size_ax2   = output_hdul[0].header[attribute_ax2_delta]
 
     # value of reference grid position of axis
     ref_value_ax2   = output_hdul[0].header['CRVAL2']
@@ -1011,7 +1018,7 @@ def reproject_spectral_cube(
 
         for idx_ax3 in range(input_ax3_len):
 
-            clear_output(wait=True)
+            display.clear_output(wait=True)
             print('Progress: ' + '#'* int((idx_ax3/input_ax3_len)*30+1) + ' '+ str(round((idx_ax3/(input_ax3_len-1))*100, 1))+'%')
 
             temp_map[0].data = copy.deepcopy(input_cube[0].data[idx_ax3, :, :])

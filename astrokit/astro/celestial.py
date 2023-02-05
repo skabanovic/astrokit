@@ -87,13 +87,15 @@ def plx2dist(parallax, parallax_err):
 
     return distance, distance_err
 
-def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all'):
+def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all', timeout=300):
 
     customSimbad = Simbad()
+    customSimbad.TIMEOUT = timeout
     customSimbad.add_votable_fields('sptype', 'parallax', 'plx')
     customSimbad.get_votable_fields()
-    query_table = customSimbad.query_region(coord.SkyCoord(pos_ra, pos_dec, frame=coord_sys),\
-                                            radius=area_size)
+    query_table = customSimbad.query_region(
+        coord.SkyCoord(pos_ra, pos_dec, frame=coord_sys),
+        radius=area_size)
 
     star_id      = []
     star_ra      = []
@@ -101,6 +103,19 @@ def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all'):
     star_type    = []
     star_plx     = []
     star_plx_err = []
+
+    check_list = isinstance(sp_type, list)
+
+    if check_list:
+
+        num_sp_types = len(sp_type)
+    
+    else:
+
+        num_sp_types = 1
+
+        sp_type = [sp_type]
+
 
     for obj in range(len(query_table)):
 
@@ -110,22 +125,24 @@ def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all'):
 
             #print(star[0])
 
+            for sp_idx in range(num_sp_types):
+
             #if sp_type == 'all' or sp_type == chr(star[0]):
-            if sp_type == 'all' or sp_type == star[0]:
+                if sp_type[sp_idx] == 'all' or sp_type[sp_idx] == star[0]:
 
-                if not star_id[:] == query_table[obj]["MAIN_ID"]:
+                    if not star_id[:] == query_table[obj]["MAIN_ID"]:
 
-                    star_id.append(query_table[obj]["MAIN_ID"])
-                    star_type.append(query_table[obj]["SP_TYPE"])
-                    star_plx.append(query_table[obj]["PLX_VALUE"].item())
-                    star_plx_err.append(query_table[obj]["PLX_ERROR"].item())
+                        star_id.append(query_table[obj]["MAIN_ID"])
+                        star_type.append(query_table[obj]["SP_TYPE"])
+                        star_plx.append(query_table[obj]["PLX_VALUE"].item())
+                        star_plx_err.append(query_table[obj]["PLX_ERROR"].item())
 
-                    star_coord=SkyCoord(query_table[obj]["RA"].item(), query_table[obj]["DEC"].item(),\
-                                        frame="icrs", unit=(u.hourangle, u.deg))
+                        star_coord=SkyCoord(query_table[obj]["RA"].item(), query_table[obj]["DEC"].item(),\
+                                            frame="icrs", unit=(u.hourangle, u.deg))
 
 
-                    star_ra.append(star_coord.ra.deg)
-                    star_dec.append(star_coord.dec.deg)
+                        star_ra.append(star_coord.ra.deg)
+                        star_dec.append(star_coord.dec.deg)
 
     return star_id, star_ra, star_dec, star_type, star_plx, star_plx_err
 

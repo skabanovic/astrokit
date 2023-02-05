@@ -66,9 +66,9 @@ def plot_spectrum(
     img_format = 'pdf'
 ):
 
-    fig = plt.figure(figsize=(15,15))
+    fig = plt.figure(figsize=(14,7))
 
-    plt.step(vel, temp, linewidth=3)
+    plt.step(vel, temp, linewidth=3, where='mid')
     plt.rc('xtick', labelsize=fontsize)
     plt.rc('ytick', labelsize=fontsize)
     plt.title(title, size=fontsize)
@@ -90,7 +90,7 @@ def plot_spectrum(
 def plot_map(
     sky_map,
     fontsize=18,
-    figsize = (18, 15),
+    figsize = (15, 15),
     vmin = None,
     vmax = None,
     ra_lable = 'RA (J2000)',
@@ -102,7 +102,8 @@ def plot_map(
     save_img = False,
     img_path='./',
     img_name = 'image',
-    img_format = 'pdf'
+    img_format = 'pdf',
+    aspect='auto' # or equal  '
 ):
 
     wcs = WCS(sky_map[0].header)
@@ -111,10 +112,11 @@ def plot_map(
     plt.subplot(projection=wcs)
     if (vmin and vmax) is not None:
         cax=plt.imshow(sky_map[0].data, origin='lower', vmin = vmin, vmax =vmax,
-                       cmap='Spectral_r', interpolation = interpolation, aspect='auto')
+                       cmap='Spectral_r', interpolation = interpolation, aspect=aspect)
     else:
         cax=plt.imshow(sky_map[0].data, origin='lower',
-                       cmap='Spectral_r', interpolation = interpolation, aspect='auto')
+                       cmap='Spectral_r', interpolation = interpolation, aspect=aspect)
+    #cbar=plt.colorbar(cax, fraction=0.046, pad=0.04)
     cbar=plt.colorbar(cax)
     plt.xlabel(ra_lable ,fontsize=fontsize)
     plt.ylabel(dec_lable ,fontsize=fontsize)
@@ -134,7 +136,6 @@ def plot_map(
                                   transparent = False, bbox_inches = 'tight', pad_inches = 0)
 
 
-# added by Cristian Guevara
 def plot_channel_maps(
     channel_maps,
     vel_start,
@@ -152,11 +153,13 @@ def plot_channel_maps(
     color_bar = 'Intensity [K$\,$km/s]',
     color_map = 'Spectral_r',
     interpolation = 'none',
-    do_contour = False,
-    contour_level = None,
+    contour_maps = None,
+    contour_levels = None,
+    contour_bounds = None,
     fontsize = 18,
     font_scale = 6,
     axis_scale = 6,
+    aspect = 'auto',
     save_img = False,
     img_path='./',
     img_name = 'image',
@@ -182,39 +185,24 @@ def plot_channel_maps(
     #aspect ratio withn respecto to vertical direction
     yratio = channel_maps[0][0].header["NAXIS2"]/channel_maps[0][0].header["NAXIS1"]
 
-    maxv=[]
-    minv=[]
-
-    channel_number = columns*rows
-
-    for channel in range(channel_number):
-
-        channel_maps[channel][0].data = np.nan_to_num(channel_maps[channel][0].data)
-        maxv.append(np.nanmax(channel_maps[channel][0].data))
-        minv.append(np.nanmin(channel_maps[channel][0].data))
-
-    if vmin is None:
-
-        vmin = min(maxv)
-
-    if vmax is None:
-
-        vmax= max(maxv)
-
-    if do_contour :
-
-        step = (vmax-vmin)/contour_level #step of the contours
-        levels = np.arange(v_min+step,v_max+step,step) # levels array
-
     if columns==1 and rows==1:
 
-        fig = plt.figure(figsize=(25, 15))
+        fig = plt.figure(figsize=(25, 25))
         plt.subplot(projection=w)
-        cax=plt.imshow(channel_maps[0][0].data, origin='lower',cmap=color_map, vmax=vmax, vmin=vmin, interpolation = interpolation)
+        cax=plt.imshow(channel_maps[0][0].data, origin='lower',cmap=color_map, vmax=vmax, vmin=vmin, interpolation = interpolation, aspect=aspect)
         cbar=plt.colorbar(cax)
-        if do_contour:
-            plt.contour(channel_maps[0][0].data, contour_level)
-        plt.text(channel_maps[0][0].header["NAXIS1"]*xloc, channel_maps[0][0].header["NAXIS2"]*yloc, \
+        if contour_maps is not None:
+            cmax = np.max(contour_maps[0][0].data)*contour_bounds[1]
+            cmin = np.max(contour_maps[0][0].data)*contour_bounds[0]
+            clevels=np.linspace(cmin, cmax, contour_levels)
+            greyc= np.linspace(0,1,len(clevels))
+            greyct = []
+            for j in range(0,len(clevels)):
+                greyct.append(str(greyc[j]))
+
+            plt.contour(contour_maps[0][0].data, levels=clevels, colors=greyct, linewidths = 3)
+
+        plt.text(contour_maps[0][0].header["NAXIS1"]*xloc, channel_maps[0][0].header["NAXIS2"]*yloc, \
                  str(vel_start)+" to "+str(vel_start+(1)*vel_res)+" [km/s]", \
                  bbox={'facecolor': 'lightgrey', 'pad': 10}, fontsize = fontsize)
         plt.xlabel(ra_lable, fontsize = fontsize)
@@ -249,9 +237,16 @@ def plot_channel_maps(
                     lat.set_ticklabel(size=axis_scale*max(columns,rows))
                 im = a.imshow(channel_maps[column][0].data, cmap=color_map,\
                               vmax=vmax, vmin=vmin, origin='lower',
-                              interpolation = interpolation)
-                if do_contour:
-                    a.contour(channel_maps[column][0].data, levels )
+                              interpolation = interpolation, aspect=aspect)
+                if contour_maps is not None:
+                    cmax = np.max(contour_maps[column][0].data)*contour_bounds[1]
+                    cmin = np.max(contour_maps[column][0].data)*contour_bounds[0]
+                    clevels=np.linspace(cmin, cmax, contour_levels)
+                    greyc= np.linspace(0,1,len(clevels))
+                    greyct = []
+                    for j in range(0,len(clevels)):
+                        greyct.append(str(greyc[j]))
+                    a.contour(contour_maps[column][0].data, levels=clevels, colors=greyct, linewidths = 3 )
                 if column == 0:
                     lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
                     lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
@@ -261,8 +256,9 @@ def plot_channel_maps(
 
 
 
-        fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.80, 0.125, 0.05/columns, 0.76/rows])
+        fig.subplots_adjust(right=.8)
+        cbar_ax = fig.add_axes([0.80, 0.11, 0.05/columns, 0.77/rows])
+        #cbar_ax = fig.add_axes([0.80, 0.125, 0.05/columns, 0.76/rows])
         cbar=fig.colorbar(im, cax=cbar_ax)
         cbar_ax.tick_params(labelsize=8*max(columns, rows))
         cbar.set_label(color_bar,size=font_scale*max(columns, rows))
@@ -288,9 +284,16 @@ def plot_channel_maps(
                     lon.set_ticklabel(size=axis_scale*max(columns,rows))
                 im = a.imshow(channel_maps[row][0].data, cmap=color_map,\
                               vmax=vmax, vmin=vmin, origin='lower',
-                              interpolation = interpolation)
-                if do_contour:
-                    a.contour(channel_maps[row][0].data, levels)
+                              interpolation = interpolation, aspect=aspect)
+                if contour_maps is not None:
+                    cmax = np.max(contour_maps[row][0].data)*contour_bounds[1]
+                    cmin = np.max(contour_maps[row][0].data)*contour_bounds[0]
+                    clevels=np.linspace(cmin, cmax, contour_levels)
+                    greyc= np.linspace(0,1,len(clevels))
+                    greyct = []
+                    for j in range(0,len(clevels)):
+                        greyct.append(str(greyc[j]))
+                    a.contour(contour_maps[row][0].data, levels=clevels, colors=greyct, linewidths = 3)
                 if row == rows-1:
                     lon.set_axislabel(ra_lable, size=font_scale*max(columns,rows))
                     lat.set_axislabel(dec_lable, size=font_scale*max(columns,rows))
@@ -299,7 +302,8 @@ def plot_channel_maps(
                     lat.set_axislabel(' ')
 
         fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.80, 0.125, 0.05, 0.76/rows])
+        #cbar_ax = fig.add_axes([0.80, 0.125, 0.05, 0.76/rows])
+        cbar_ax = fig.add_axes([0.80, 0.11, 0.05, 0.77/rows])
         cbar=fig.colorbar(im, cax=cbar_ax)
         cbar_ax.tick_params(labelsize=8*max(columns, rows))
         cbar.set_label(color_bar, size=font_scale*max(columns,rows))
@@ -336,17 +340,25 @@ def plot_channel_maps(
                     lat.set_axislabel(' ')
 
                 im = a.imshow(channel_maps[la][0].data, cmap=color_map,\
-                              vmax=vmax, vmin=vmin, origin='lower', interpolation = interpolation)
+                              vmax=vmax, vmin=vmin, origin='lower', interpolation = interpolation, aspect=aspect)
 
 
 
-                if do_contour:
-                    a.contour(channel_maps[la][0].data,levels )
+                if contour_maps is not None:
+                    cmax = np.max(contour_maps[la][0].data)*contour_bounds[1]
+                    cmin = np.max(contour_maps[la][0].data)*contour_bounds[0]
+                    clevels=np.linspace(cmin, cmax, contour_levels)
+                    greyc= np.linspace(0,1,len(clevels))
+                    greyct = []
+                    for j in range(0,len(clevels)):
+                        greyct.append(str(greyc[j]))
+                    a.contour(contour_maps[la][0].data,levels=clevels, colors=greyct, linewidths = 3 )
                 la = la+1
 
 
         fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.80, 0.125, 0.05/rows, 0.76/rows])
+        #cbar_ax = fig.add_axes([0.80, 0.125, 0.05/rows, 0.76/rows])
+        cbar_ax = fig.add_axes([0.80, 0.11, 0.05/columns, 0.77/rows])
         cbar=fig.colorbar(im, cax=cbar_ax)
         cbar_ax.tick_params(labelsize=8*max(columns, rows))
         cbar.set_label(color_bar, size=font_scale*max(columns,rows))

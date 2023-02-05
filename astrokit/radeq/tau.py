@@ -716,6 +716,14 @@ def inten_to_flux(inten, line, inten_err=0.):
         # cii rest frequency in [Hz]
         freq = 1900.5369e9
 
+    elif line == '12co(1-0)':
+
+        freq = 115.271202e9
+
+    elif line == '13co(1-0)':
+
+        freq = 110.201359e9
+
     elif line == '12co(3-2)':
 
         # 12CO (3-2) rest frequency [Hz]
@@ -740,6 +748,49 @@ def inten_to_flux(inten, line, inten_err=0.):
     flux_err = inten_err*const_flux
 
     return flux, flux_err
+
+def flux_map(
+    map_inten,
+    line,
+    map_inten_err = None
+
+):
+
+    if map_inten_err is None:
+
+        out_err = False
+
+        map_inten_err = astrokit.zeros_map(map_inten)
+
+    else:
+
+        out_err = True
+
+    map_flux = astrokit.zeros_map(map_inten)
+    map_flux_err = astrokit.zeros_map(map_inten)
+
+    naxis_ra = map_inten[0].header['NAXIS1']
+    naxis_dec = map_inten[0].header['NAXIS2']
+
+    for ra in range(naxis_ra):
+        for dec in range(naxis_dec):
+
+            map_flux[0].data[dec, ra], map_flux_err[0].data[dec, ra] = inten_to_flux(
+                inten = map_inten[0].data[dec, ra],
+                line = line,
+                inten_err = map_inten_err[0].data[dec, ra]
+            )
+
+
+    if out_err:
+
+        return map_flux, map_flux_err
+
+    else:
+
+        return map_flux
+
+    
 
 def line_luminosity(inten,
                     line,
@@ -903,6 +954,7 @@ def optical_depth_map(main_map,
                       ratio_norm,
                       error_ratio = 0,
                       noise_limit = 3.,
+                      tau_max = 100,
                       method = 'bisection'):
 
     tau_map = astrokit.zeros_map(main_map)
@@ -916,8 +968,9 @@ def optical_depth_map(main_map,
 
             check_1 = (iso_map[0].data[idx_ax2, idx_ax1]*(iso_ratio/ratio_norm)) - main_map[0].data[idx_ax2, idx_ax1]
             check_2 = iso_map[0].data[idx_ax2, idx_ax1] - (noise_limit*iso_err_map[0].data[idx_ax2, idx_ax1])
+            check_3 = main_map[0].data[idx_ax2, idx_ax1] - (noise_limit*main_err_map[0].data[idx_ax2, idx_ax1])
 
-            if ((check_1 > 0.) and (check_2 > 0.)):
+            if ((check_1 > 0.) and (check_2 > 0.) and (check_3 > 0.)):
 
                 tau_map[0].data[idx_ax2, idx_ax1], tau_err_map[0].data[idx_ax2, idx_ax1] =\
                 astrokit.optical_depth_ratio(iso_ratio,
@@ -928,7 +981,7 @@ def optical_depth_map(main_map,
                                              error_main = main_err_map[0].data[idx_ax2, idx_ax1],
                                              error_iso = iso_err_map[0].data[idx_ax2, idx_ax1],
                                              method = method,
-                                             tau_max = 100)
+                                             tau_max = tau_max)
 
             else:
 

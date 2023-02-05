@@ -90,7 +90,7 @@ def line_profile(
 
             line_shape = amp*(gauss_main+gauss_iso)
 
-    elif profile == 'cii' or profile == 'cii_wing':
+    elif profile == 'cii' or profile == 'cii_wing' or profile == '13cii':
 
         # velocity shift of the [13CII] F(2-1), F(1-0) and F(1-1)
         # transition lines with respect to the [12CII] line [km/s]
@@ -122,87 +122,29 @@ def line_profile(
 
             line_norm = np.sqrt(beta)/(np.sqrt(np.pi)*width*1e3)
 
-            line_shape = line_norm*amp\
-                 * (line_12cii + line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
-        else:
-
-            line_shape = amp*(line_12cii + line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
-
-    return line_shape
-
-def multi_line_profile(vel,
-                       *param,
-                       abundace_ratio,
-                       profile,
-                       line,
-                       norm):
-
-    if line == 'cii':
-
-        # [12CII] rest frequency [Hz]
-        freq_0 = 1900.5369e9
-
-    elif line == '12co4-3':
-
-        # 12CO (4-3) rest frequency [Hz]
-        freq_0 = 461.0406e9
-
-    # conversion factor from FWHM to sigma
-    beta = 4.*np.log(2.)
-
-    line_sum = np.zeros_like(vel)
-
-    for comp in range(0, len(param), 3):
-
-        amp   = param[comp]
-        vel_0 = param[comp+1]
-        width = param[comp+2]
-
-        if profile == 'gauss':
-
-            line_shape = amp*np.exp(-(vel-vel_0)**2*beta/width**2)
-
-        elif profile == 'cii' or profile == 'cii_wing':
-
-            # velocity shift of the [13CII] F(2-1), F(1-0) and F(1-1)
-            # transition lines with respect to the [12CII] line [km/s]
-            vel_13cii_f21 = 11.2
-            vel_13cii_f10 = -65.2
-            vel_13cii_f11 = 63.3
-
-            # relative line strength of the 13CII satellites
-            line_f21_norm = 0.625
-            line_f10_norm = 0.250
-            line_f11_norm = 0.125
-
-            # [12CII] line profile
-            line_12cii = np.exp(-(vel-vel_0)**2*beta/width**2)
-
-            # [13CII] F(2-1) line profile
-            line_13cii_f21 = (line_f21_norm/abundace_ratio)\
-                           * np.exp(-(vel-vel_13cii_f21-vel_0)**2*beta/width**2)
-
-            # [13CII] F(1-0) line profile
-            line_13cii_f10 = (line_f10_norm/abundace_ratio)\
-                           * np.exp(-(vel-vel_13cii_f10-vel_0)**2*beta/width**2)
-
-            # [13CII] F(1-1) line profile
-            line_13cii_f11 = (line_f11_norm/abundace_ratio)\
-                           * np.exp(-(vel-vel_13cii_f11-vel_0)**2*beta/width**2)
-
-            if norm:
-
-                line_norm = np.sqrt(beta)/(np.sqrt(np.pi)*width*1e3)
+            if profile == '13cii':
 
                 line_shape = line_norm*amp\
-                     * (line_12cii + line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
+                    * (line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
+
+            else:
+
+                line_shape = line_norm*amp\
+                    * (line_12cii + line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
+        else:
+
+            if profile == '13cii':
+
+                line_shape = amp*(line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
+
             else:
 
                 line_shape = amp*(line_12cii + line_13cii_f21 + line_13cii_f10 + line_13cii_f11)
 
-            line_sum = line_sum + line_shape
 
-    return line_sum
+
+    return line_shape
+
 
 #############################################################
 #
@@ -635,7 +577,7 @@ def two_layer(
 
                     else:
 
-                        colden = param[i]/line_ratio[idx_line]
+                        colden = param[i]/line_ratio[idx_line, 0]
    
                     tau = optical_depth(
 
@@ -659,7 +601,7 @@ def two_layer(
 
                     else:
 
-                        tau_0 = param[i]/line_ratio[idx_line]
+                        tau_0 = param[i]/line_ratio[idx_line, 0]
 
                     tau = line_profile(
 
@@ -697,7 +639,7 @@ def two_layer(
 
                     else:
 
-                        colden = param[i]/line_ratio[idx_line]
+                        colden = param[i]/line_ratio[idx_line, 1]
 
                     tau = optical_depth(
 
@@ -721,7 +663,7 @@ def two_layer(
 
                     else:
 
-                        tau_0 = param[i]/line_ratio[idx_line]
+                        tau_0 = param[i]/line_ratio[idx_line, 1]
 
                     tau = line_profile(
 
@@ -786,7 +728,7 @@ def two_layer(
 
                     else:
 
-                        colden = param[i]/line_ratio[idx_line]
+                        colden = param[i]/line_ratio[idx_line, 0]
 
                     tau = optical_depth(
                         vel,
@@ -808,7 +750,7 @@ def two_layer(
 
                     else:
 
-                        tau_0 = param[i]/line_ratio[idx_line]
+                        tau_0 = param[i]/line_ratio[idx_line, 0]
 
                     #print('two layer function:')
                     #print(profile[idx_line])
