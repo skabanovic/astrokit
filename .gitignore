@@ -1,2 +1,4 @@
-*/__pycache__/
-*/bak/
+**/__pycache__/
+**/bak/
+astrokit.egg-info/
+build/
