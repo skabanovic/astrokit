@@ -332,8 +332,10 @@ def channel_map(
             for idx_dec in range(len(map_intg[0].data[:,0])):
                 for idx_ra in range(len(map_intg[0].data[0,:])):
 
-                    map_intg[0].data[idx_dec, idx_ra]=np.trapz(hdul[0].data[idx_min:idx_max, idx_dec, idx_ra],\
-                                                               vel[idx_min:idx_max])
+                    map_intg[0].data[idx_dec, idx_ra]=np.trapz(
+                        hdul[0].data[idx_min:idx_max, idx_dec, idx_ra],
+                        vel[idx_min:idx_max]
+                    )
 
 
         elif unit == 'velocity':
@@ -343,17 +345,25 @@ def channel_map(
 
             vel_res = hdul[0].header["CDELT3"]/1.0e3
 
-            check_num = (vel_max-vel_min)/vel_res
+            #check_num = (vel_max-vel_min)/vel_res
 
-            if check_num <= 1:
+            ch_num = round((vel_max-vel_min)/vel_res)+1
 
-                ch_vel = [[vel_min, vel_max]]
+            if ch_num < 3:
+
+                ch_vel = [vel_min, vel_max]
 
             else:
 
-                ch_num = round((vel_max-vel_min)/vel_res+0.49)
-                vel_res_new = (vel_max - vel_min)/(ch_num + 1)
-                ch_vel = np.arange(vel_min, vel_max+vel_res, vel_res_new)
+                ch_vel = np.linspace(vel_min, vel_max, num = ch_num)
+
+                #ch_num = round((vel_max-vel_min)/vel_res+0.49)
+                #ch_vel = np.linspace(vel_min, vel_max, num = ch_num+1)
+
+                #ch_num = int((vel_max-vel_min)/vel_res)+1
+
+                #vel_res_new = (vel_max - vel_min)/(ch_num + 1)
+                # ch_vel = np.arange(vel_min, vel_max+vel_res, vel_res_new)
 
                 # ch_num = int((vel_max-vel_min)/vel_res)
                 # vel_res = (vel_max - vel_min)/ch_num
@@ -648,7 +658,7 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
         for win_idx in range(0, len(window), 2):
 
             start_idx = get_idx(window[win_idx], vel, 'closer')
-            end_idx   = get_idx(window[win_idx+1], vel, 'closer')
+            end_idx   = get_idx(window[win_idx+1], vel, 'closer')+1
 
             rms_mask[start_idx:end_idx]=1
 
@@ -675,7 +685,7 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
     elif range:
 
         idx_min = get_idx(rms_range[0], vel, 'closer')
-        idx_max = get_idx(rms_range[1], vel, 'closer')
+        idx_max = get_idx(rms_range[1], vel, 'closer')+1
 
         num_of_zeros = np.zeros_like(spect)
         num_of_zeros[spect == 0] = 1
@@ -686,14 +696,35 @@ def rms_spectrum(vel, spect, window=None, rms_range=None):
 
 def rms_13cii(
 
-    rms_12cii
+    rms_12cii,
+    exclude_line = None
 ):
 
     norm_f21 = 0.625 
     norm_f10 = 0.25 
     norm_f11 = 0.125
 
-    rms_norm = np.sqrt(norm_f21**2 + norm_f10**2 + norm_f11**2) 
+    if exclude_line is not None:
+
+        if exclude_line == 'F(1-1)':
+
+            rms_norm = np.sqrt(norm_f21**2 + norm_f10**2) 
+
+        elif exclude_line == 'F(1-0)':
+
+            rms_norm = np.sqrt(norm_f21**2 + norm_f11**2) 
+
+        elif exclude_line == 'F(2-1)':
+
+            rms_norm = np.sqrt(norm_f10**2 + norm_f11**2) 
+        else:
+
+            print('Error: Your input is not valid! To exclude a line choose between F(2-1), F(1-0) or F(1-0)')
+
+    
+    else:
+
+        rms_norm = np.sqrt(norm_f21**2 + norm_f10**2 + norm_f11**2) 
 
     return rms_12cii/rms_norm
 
@@ -873,8 +904,9 @@ def noise_intensity_map(
 #
 #############################################################
 
-def average_cube(hdul_inp, weight = None):
+def average_cube(cube_inp, weight = None):
 
+    hdul_inp = copy.deepcopy(cube_inp) 
 
     spect_size = np.zeros_like(hdul_inp[0].data[:,0,0])
     hdu = fits.PrimaryHDU(spect_size)
@@ -1022,6 +1054,100 @@ def average_volume(
                 hdul_inp[0].data[:, idx_sig3[0, :], idx_sig3[1, :]],
                 axis = 1
             )
+    elif shape == "rectangle":
+
+        pos_cc = np.zeros(2)
+
+        dist_to_ref = pos[0] - hdul_inp[0].header['CRVAL1']
+
+        # cos corrected position
+        pos_cc[0] = hdul_inp[0].header['CRVAL1'] +  dist_to_ref*np.cos(pos[1]*np.pi/180.)
+        pos_cc[1] = pos[1]
+        
+        #grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
+        #axis_1 = grid2d_ra[np.where(grid2d_r == np.min(grid2d_r))[0][0],:]
+        #axis_2 = grid2d_dec[:, np.where(grid2d_r == np.min(grid2d_r))[0][0]]
+
+        #grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
+        #axis_1 = grid2d_ra[np.where(grid2d_r == np.min(grid2d_r))[0][0],:]
+        #axis_2 = grid2d_dec[:, np.where(grid2d_r == np.min(grid2d_r))[1][0]]
+        #dec = grid2d_dec[np.where(grid2d_r == np.min(grid2d_r))[0][0], np.where(grid2d_r == np.min(grid2d_r))[1][0]]
+
+        axis_1 = astrokit.get_axis(1, hdul_inp)
+        axis_2 = astrokit.get_axis(2, hdul_inp)
+
+        mask_map = astrokit.zeros_map(hdul_inp)
+
+        pos_min = np.zeros(2)
+        pos_max = np.zeros(2)
+
+        idx_min = np.zeros(2, dtype=int)
+        idx_max = np.zeros(2, dtype=int)
+
+        pos_min[0] = pos_cc[0] + width/2.#/np.cos(dec*np.pi/180.)
+        pos_max[0] = pos_cc[0] - width/2.#/np.cos(dec*np.pi/180.)
+
+        pos_min[1] = pos_cc[1] - height/2.
+        pos_max[1] = pos_cc[1] + height/2.
+
+        if pos_min[0] <= axis_1[-1]:
+
+            idx_min[0] = 0
+
+        else:
+
+            idx_min[0] = astrokit.get_idx(pos_min[0], axis_1, method='closer')
+
+        if pos_max[0] >= axis_1[0]:
+
+            idx_max[0] = len(axis_1)-1
+
+        else:
+             
+            idx_max[0] = astrokit.get_idx(pos_max[0], axis_1, method='closer')
+        
+        if pos_min[1] <= axis_2[0]:
+
+            idx_min[1] = 0
+
+        else:
+
+            idx_min[1] = astrokit.get_idx(pos_min[1], axis_2, method='closer')
+
+        if pos_max[1] >= axis_1[-1]:
+
+            idx_max[1] = len(axis_2)-1
+
+        else:
+
+            idx_max[1] = astrokit.get_idx(pos_max[1], axis_2, method='closer')
+
+
+        mask_map[0].data[idx_min[1]:idx_max[1]+1 ,idx_min[0]:idx_max[0]+1] = 1
+    
+        print('idx min ra: '+str(idx_min[0]))
+        print('idx max ra: '+str(idx_max[0]))
+        
+        print('idx min dec: '+str(idx_min[1]))
+        print('idx max dec: '+str(idx_max[1]))
+        
+        if weight:
+
+            spect_aver[0].data = np.average(
+                hdul_inp[0].data[:, mask_map[0].data == 1],
+                weights = weight[0].data[mask_map[0].data == 1],
+                axis = 1
+            )
+
+
+
+        else:
+
+            spect_aver[0].data = np.average(
+                hdul_inp[0].data[:, mask_map[0].data == 1],
+                axis = 1
+            )
+    
 
     else:
         print("error: no valid shape entered")
@@ -1037,7 +1163,8 @@ def average_intensity(
     radius_2 = None,
     width = None,
     height = None,
-    weight = None
+    weight = None,
+    beam_size = None,
 
 ):
 
@@ -1063,6 +1190,7 @@ def average_intensity(
     if shape == "circle" or shape == "sphere":
         # determie the distance from the line points to every grid point
         if shape == "circle":
+
             grid2d_r = np.sqrt((grid2d_dec-pos[1])**2+(grid2d_ra-pos[0])**2)
 
         elif shape == "sphere":
@@ -1081,6 +1209,21 @@ def average_intensity(
 
         bool_sig3 = np.isin(grid2d_r, grid2d_sig3)
         idx_sig3=np.asarray(np.where(bool_sig3))
+
+        if beam_size is not None:
+
+            weight = astrokit.zeros_map(map_inp)
+
+            beam_size = beam_size/3600.
+
+            weight[0].data[idx_sig3[0, :], idx_sig3[1, :]]=curve.gauss_2d(
+
+                    beam_size,
+                    pos[0], pos[1],
+                    grid2d_ra[idx_sig3[0, :], idx_sig3[1, :]],
+                    grid2d_dec[idx_sig3[0, :], idx_sig3[1, :]]
+                    
+                )
 
         if weight:
 

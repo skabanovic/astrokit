@@ -10,6 +10,8 @@ from scipy.optimize import curve_fit
 from astropy.coordinates import Angle
 import astropy.units as u
 
+import random
+
 def cluster_information(cube,
                         cluster_range,
                         #weight=None,
@@ -190,8 +192,11 @@ def cluster_information(cube,
 
 
     info_criterion = []
+    info_init_state = []
 
     cluster_list = np.arange(cluster_range[0], cluster_range[1], 1)
+
+    random_state = np.random.randint(1e3) #random.randint(1, 1e3)
 
     for cluster in cluster_list:
 
@@ -221,11 +226,11 @@ def cluster_information(cube,
 
             n_components = cluster,
             covariance_type ='full',
+            random_state = random_state,
             tol = threshold,
             max_iter = gmm_iter
 
         ).fit(sample_data)
-
 
         if methode == 'BIC':
 
@@ -248,7 +253,7 @@ def cluster_information(cube,
 
         info_criterion.append(cluster_info_criterion)
 
-    return info_criterion
+    return info_criterion, random_state
 
 # Length of each time series is simply dimV
 
@@ -263,6 +268,7 @@ def spectra_clustering(cube,
                        threshold = 1e-3,
                        reduce_dim = 'original',
                        norm = 'mean',
+                       random_state = 42,
                        pca_threshold = 0.99,
                        rms_threshold = 0):
 
@@ -436,7 +442,7 @@ def spectra_clustering(cube,
 
         n_components = n_com,
         covariance_type = 'full',
-        random_state = 42,
+        random_state = random_state,
         tol = threshold,
         max_iter = gmm_iter
 

@@ -1,5 +1,7 @@
 from astropy.coordinates import SkyCoord
 from astroquery.simbad import Simbad
+from astroquery.gaia import Gaia
+import time
 
 #from astropy.modeling.models import BlackBody1D
 #from astropy.modeling.blackbody import FLAM
@@ -20,8 +22,27 @@ from astropy.wcs import WCS
 from astrokit.prism import specube
 
 from astropy import constants as const
+#import gdr3bcg.bcg as bcg
+
+from joblib import Parallel, delayed
 
 import astrokit
+
+#def galactic_distance(
+#    obj_pos,
+#    obj_dist, 
+#    obj_dist_err, 
+#    gc_dist = 8178, # Gravity Colaboration et al. 2019. gc_dist = 7900 (Milam et al. 2015) 
+#    gc_dist_err = 22,
+#    coor_frame = 'icrs'
+#    ):
+
+#    obj_coor = SkyCoord(
+#        ra=obj_pos[0], 
+#        dec=obj_pos[1], 
+#        distance = obj_dist, 
+#        frame = coor_frame
+#        )
 
 def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, gc_dist = 8178, coor_frame = 'icrs'):
 
@@ -47,29 +68,29 @@ def galactic_plane_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, gc_dist 
 
     return gc2obj_dist, gc2obj_err
 
-def galactic_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_frame = 'icrs'):
+#def galactic_distance(obj_pos1, obj_pos2, obj_dist, obj_dist_err, coor_frame = 'icrs'):
 
-    obj_coor = SkyCoord(ra=obj_pos1, dec=obj_pos2, distance = obj_dist, frame = coor_frame)
+#    obj_coor = SkyCoord(ra=obj_pos1, dec=obj_pos2, distance = obj_dist, frame = coor_frame)
 
-    gc_dist = 8178
+#    gc_dist = 8178
     #gc_dist = 7900
 
-    gc_dist_err = 22
+#    gc_dist_err = 22
 
-    gc2obj_const = gc_dist**2 + obj_dist.value**2 - 2. * gc_dist*obj_dist.value \
-                 * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
+#    gc2obj_const = gc_dist**2 + obj_dist.value**2 - 2. * gc_dist*obj_dist.value \
+#                 * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
 
-    gc2obj_dist = np.sqrt(gc2obj_const)
+#    gc2obj_dist = np.sqrt(gc2obj_const)
 
-    gc2obj_err_gc = 2. * gc_dist - 2. * obj_dist.value * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
+#    gc2obj_err_gc = 2. * gc_dist - 2. * obj_dist.value * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
 
-    gc2obj_err_obj = 2. * obj_dist.value \
-                     - 2. * gc_dist * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
+#    gc2obj_err_obj = 2. * obj_dist.value \
+#                     - 2. * gc_dist * (np.sin(np.pi/2.-obj_coor.galactic.b.rad) * np.cos(obj_coor.galactic.l) + np.cos(np.pi/2.-obj_coor.galactic.b.rad))
 
-    gc2obj_err = np.sqrt(1./(4. * gc2obj_const) * ( gc2obj_err_gc**2 * gc_dist_err**2 \
-                                                   + gc2obj_err_obj**2 * obj_dist_err.value**2))
+#    gc2obj_err = np.sqrt(1./(4. * gc2obj_const) * ( gc2obj_err_gc**2 * gc_dist_err**2 \
+#                                                   + gc2obj_err_obj**2 * obj_dist_err.value**2))
 
-    return gc2obj_dist, gc2obj_err
+#    return gc2obj_dist, gc2obj_err
 
 def plx2dist(parallax, parallax_err):
 
@@ -87,7 +108,104 @@ def plx2dist(parallax, parallax_err):
 
     return distance, distance_err
 
-def star_properties(pos_ra, pos_dec, area_size, coord_sys, sp_type = 'all', timeout=300):
+def gaia_search(
+
+    cent_ra,
+    cent_dec,
+    radius = None,
+    width = None,
+    hight = None,
+    frame = 'icrs',
+    cone_search = False,
+    
+):
+
+    Gaia.MAIN_GAIA_TABLE = "gaiadr3.gaia_source"
+    Gaia.ROW_LIMIT = -1
+    coord = SkyCoord(ra=cent_ra, dec=cent_dec, unit=(u.degree, u.degree), frame=frame)
+
+
+    if cone_search:
+
+        cone_search = Gaia.cone_search_async(coord, radius=u.Quantity(radius, u.deg))
+        stars = cone_search.get_results()
+    
+    else:
+
+        if radius is not None:
+            
+            radius = u.Quantity(radius, u.deg)
+            stars = Gaia.query_object_async(coordinate=coord, radius=radius)
+            
+        else:
+            
+            width = u.Quantity(width, u.deg)
+            height = u.Quantity(hight, u.deg)
+            stars = Gaia.query_object_async(coordinate=coord, width=width, height=height)
+            
+    return stars
+    
+
+###########################################################################################
+#
+#def gaia_luminosity(
+#    magnitud_g_band,
+#    extinction_g_band,
+#    distance,
+#    temp_eff,
+#    log_surface_gravity,
+#    iron_abundace, 
+#    alpha_enhancment = 0.,
+    
+#):
+    
+#    absolute_magnitud_g_band = magnitud_g_band+5.-5.*np.log10(distance)-extinction_g_band
+#    stellar_properties=[temp_eff, log_surface_gravity, iron_abundace, alpha_enhancment]
+#    bc=bcg.BolometryTable()
+#    band_correction_g = bc.computeBc(stellar_properties)
+    
+#    luminosity = 10**(-0.4*(absolute_magnitud_g_band+band_correction_g-4.74)) 
+    
+#    return luminosity
+
+##################################################################################################
+
+def extract_stellar_info(stars): 
+
+    stellar_info = []
+
+    # stars.columns gives additional options
+        
+    for star in range(len(stars.columns['teff_val'])):
+        
+        if stars.columns['teff_val'][star]>0:
+        
+            stellar_info.append([
+                
+                stars.columns['source_id'][star], 
+                stars.columns['ra'][star],
+                stars.columns['ra_error'][star],
+                stars.columns['dec'][star],
+                stars.columns['dec_error'][star],
+                stars.columns['parallax'][star],
+                stars.columns['parallax_error'][star],
+                stars.columns['teff_val'][star],
+                stars.columns['lum_val'][star],
+            ])
+
+    return stellar_info
+
+
+def star_properties(
+        
+        pos_ra, 
+        pos_dec, 
+        area_size, 
+        coord_sys, 
+        sp_type = 'all', 
+        timeout=300
+        
+        ):
 
     customSimbad = Simbad()
     customSimbad.TIMEOUT = timeout
@@ -209,15 +327,17 @@ def fix_spectral_type(stars):
 
     return star_type, star_evo
 
-def uv_luminosity(temp, lum):
+#def uv_luminosity(temp, lum):
+#
+#    #Lsun = 3.839e33 # in erg/s
 
-    #Lsun = 3.839e33 # in erg/s
+#    uv_lum=np.zeros_like(lum)
 
-    uv_lum=np.zeros_like(lum)
+#    num_stars = len(temp)
 
-    num_star = len(temp)
-
-    for star in range(num_star):
+#    show_progress = 0
+#    for star in range(num_stars):
+#        time_start = time.time()
 
         #wav_max  = np.log10(2897.8e-4/temp[star])
         #wav_st = wav_max-2
@@ -236,33 +356,68 @@ def uv_luminosity(temp, lum):
         #integ_flux = np.trapz(flux, 10**wav)
         #print(integ_flux*1e-15)
 
-        integ_flux_const = 2*np.pi**4*const.k_B.cgs.value**4/15./const.h.cgs.value**3/const.c.cgs.value**2
+#        integ_flux_const = 2*np.pi**4*const.k_B.cgs.value**4/15./const.h.cgs.value**3/const.c.cgs.value**2
 
-        integ_flux = integ_flux_const * temp[star]**4
+#        integ_flux = integ_flux_const * temp[star]**4
 
         #print(integ_flux*1e-15)
 
-        wav_st = np.log10(910e-8)
-        wav_end = np.log10(2066e-8)
-        wav_step = (wav_end - wav_st)/1e6
+#        wav_st = np.log10(910e-8)
+#        wav_end = np.log10(2066e-8)
+#        wav_step = (wav_end - wav_st)/1e6
 
-        wav_uv = np.arange(wav_st, wav_end, wav_step)
+#        wav_uv = np.arange(wav_st, wav_end, wav_step)
 
-        flux_uv = astrokit.black_body(
-            wav_uv,
-            temp[star],
-            input_unit='wavelength',
-            system_of_units = 'cgs',
-            input_scale = 'log10'
-            )
+#        flux_uv = astrokit.black_body(
+#            wav_uv,
+#            temp[star],
+#            input_unit='wavelength',
+#            system_of_units = 'cgs',
+#            input_scale = 'log10'
+#            )
 
-        integ_flux_uv = np.trapz(flux_uv, 10**wav_uv)
+#        integ_flux_uv = np.trapz(flux_uv, 10**wav_uv)
 
         #print(integ_flux_uv*1e-15)
 
-        uv_lum[star] = (integ_flux_uv/integ_flux)*lum[star]
+#        uv_lum[star] = (integ_flux_uv/integ_flux)*lum[star]
+
+#        time_end = time.time()
+#        if (star/(num_stars-1)*100. > show_progress):
+#            astrokit.loop_time(star, num_stars, time_start, time_end)
+#            show_progress = show_progress + 5
+
+#    return uv_lum
+
+def fuv_luminosity(temp, lum):
+
+    #integ_flux_const = 2*np.pi**4*const.k_B.cgs.value**4/15./const.h.cgs.value**3/const.c.cgs.value**2
+    integ_flux_const = const.sigma_sb.cgs.value/np.pi
+
+    integ_flux = integ_flux_const * temp**4
+
+    wav_st = 910e-8 #np.log10(910e-8) # in cm
+    wav_end = 2066e-8 #np.log10(2066e-8) # in cm 
+    #wav_step = (wav_end - wav_st)/1e6
+
+    wav_uv = np.linspace(wav_st, wav_end, num = 100000)#np.arange(wav_st, wav_end, wav_step)
+
+    flux_uv = astrokit.black_body(
+
+        wav_uv,
+        temp,
+        input_unit='wavelength',
+        system_of_units = 'cgs',
+        input_scale = 'linear' #'log10'
+    )
+
+    #integ_flux_uv = np.trapz(flux_uv, 10**wav_uv)
+    integ_flux_uv = np.trapz(flux_uv, wav_uv)
+
+    uv_lum = (integ_flux_uv/integ_flux)*lum
 
     return uv_lum
+
 
 def sky_grid(cent_ra, cent_dec, size_ra, size_dec, res = 'nan'):
 
@@ -378,8 +533,193 @@ def uv_sky(
 
     return hdul_uv
 
+def stellar_flux(
 
-def get_uv_map(
+    source_ra, # deg
+    source_dec, # deg
+    source_dist, # pc
+    star_ra, # deg
+    star_dec, # deg
+    star_dist, # pc
+    star_lum, # 
+    optical_depth = 0.0, # extinction_fuv
+    frame = 'icrs',
+
+):
+
+    star_coord = SkyCoord(
+        ra = star_ra * u.deg,
+        dec = star_dec * u.deg,
+        distance = star_dist * u.pc,
+        frame = frame
+    )
+
+    source_coord = SkyCoord(
+        ra = source_ra*u.deg,
+        dec = source_dec*u.deg,
+        distance = source_dist*u.pc,
+        frame = frame
+    )
+
+    star2source_dist = source_coord.separation_3d(star_coord)
+
+    star_flux =  star_lum/(4.*np.pi*star2source_dist.cm**2)*np.exp(-optical_depth)
+
+    return star_flux
+
+
+
+def radiation_field(
+
+    stars_pos,
+    stars_dist,
+    grid_dist,
+    list_pos = None,
+    grid_pos = None, # input is fits file
+    coord_sys = 'icrs',
+    stars_lum = None,
+    stars_temp = None,
+    extinction = False,
+    num_cores = -1,
+    lum_inp = 'bol', # define input luminosity 'bol' 
+    flux_out = 'fuv' # define output flux
+
+):
+
+    num_stars = len(stars_pos)
+
+    if (flux_out == 'fuv') and (lum_inp == 'bol'):
+
+        print('determine the FUV part of stellar bol luminosity')
+        stars_lum_fuv  = Parallel(n_jobs=num_cores)(delayed(astrokit.fuv_luminosity)(stars_temp[star], stars_lum[star]) for star in range(num_stars))
+
+    else:
+
+        print('Warrning: the assumped input luminosity is:' + lum_inp)
+        stars_lum_fuv = stars_lum
+
+    if list_pos is not None:
+
+        if len(list_pos.shape) > 1:
+
+            len_of_list = len(list_pos)
+            
+            #uv_field = np.zeros(len_of_list)
+            
+            grid_ra = np.zeros(len_of_list)
+            grid_dec = np.zeros(len_of_list)
+
+            print('get list of positions')
+
+            grid_ra[:] = list_pos[:, 0]
+            grid_dec[:] = list_pos[:, 1]
+
+            stars_flux = np.zeros(len_of_list)
+
+        else:
+
+            len_of_list = 1
+
+            stars_flux = 0
+
+            print('get list of positions')
+
+            grid_ra = [list_pos[0]]
+            grid_dec = [list_pos[1]]
+
+        flux_at_position = np.zeros(num_stars)
+        for pos in range(len_of_list):
+
+            if extinction:
+                optical_depth = np.zeros(num_stars)
+                print('determine extinction of the FUV-field')
+                optical_depth = Parallel(n_jobs=num_cores)(delayed(astrokit.galactic_extinction)(grid_ra[pos], grid_dec[pos], grid_dist, stars_pos[star, 0], stars_pos[star, 1], stars_dist[star], frame = 'icrs', step_size = 0.1, cross_section_scattering = 7.5e-22, scattering_events = 0.9, cross_section_absorption = 8.0e-22) for star in range(num_stars))
+                
+                #print('min optical depth:', np.min(optical_depth))
+                print('determine stellar flux at position: ', pos)
+                flux_at_position  = Parallel(n_jobs=num_cores)(delayed(astrokit.stellar_flux)(grid_ra[pos], grid_dec[pos], grid_dist, stars_pos[star, 0], stars_pos[star, 1], stars_dist[star], stars_lum_fuv[star], optical_depth = optical_depth[star], frame = 'icrs') for star in range(num_stars))
+
+            else:
+                print('determine stellar flux at position: ', pos)
+                flux_at_position  = Parallel(n_jobs=num_cores)(delayed(astrokit.stellar_flux)(grid_ra[pos], grid_dec[pos], grid_dist, stars_pos[star, 0], stars_pos[star, 1], stars_dist[star], stars_lum_fuv[star], optical_depth = 0.0, frame = 'icrs') for star in range(num_stars))
+
+            if len_of_list == 1:
+
+                stars_flux = np.sum(flux_at_position)
+            else:
+
+                stars_flux[pos] = np.sum(flux_at_position)
+
+    else:
+        
+        stars_flux = np.zeros_like(grid_pos[0].data)
+
+        print('get grid')
+        grid_ra, grid_dec = astrokit.get_grid(grid_pos)
+
+        center_dec_idx = grid_ra.shape[0] // 2
+        center_ra_idx = grid_dec.shape[1] // 2
+
+
+        grid_ra_center = grid_ra[center_dec_idx, center_ra_idx]
+        grid_dec_center = grid_dec[center_dec_idx, center_ra_idx]
+        #map_uv = astrokit.zeros_map(grid_inp)
+
+        if extinction:
+            optical_depth = np.zeros(num_stars)
+            print('determine extinction of the FUV-field')
+            optical_depth = Parallel(n_jobs=num_cores)(delayed(astrokit.galactic_extinction)(grid_ra_center, grid_dec_center, grid_dist, stars_pos[star, 0], stars_pos[star, 1], stars_dist[star], frame = 'icrs', step_size = 0.1, cross_section_scattering = 7.5e-22, scattering_events = 0.9, cross_section_absorption = 8.0e-22) for star in range(num_stars))
+    
+        print('set star positions')
+        stars_coord = SkyCoord(
+            ra = stars_pos[:, 0] * u.deg,
+            dec = stars_pos[:, 1] * u.deg,
+            distance = stars_dist * u.pc,
+            frame = coord_sys
+        )
+
+        print('set grid position')
+        grid_coord = SkyCoord(
+            ra = grid_ra*u.deg,
+            dec = grid_dec*u.deg,
+            distance = grid_dist*u.pc,
+            frame = coord_sys
+        )
+
+        show_progress = 0
+
+        print('start to determine the UV-Field')
+        for star in range(num_stars):
+
+            time_start = time.time()
+
+            grid2star = grid_coord.separation_3d(stars_coord[star])
+
+            if extinction:
+                stars_flux = stars_flux + stars_lum_fuv[star]/(4.*np.pi*grid2star.cm**2)*np.exp(-optical_depth[star])
+            else:
+                stars_flux = stars_flux + stars_lum_fuv[star]/(4.*np.pi*grid2star.cm**2)
+
+            time_end = time.time()
+            if (star/(num_stars-1)*100. > show_progress):
+                astrokit.loop_time(star, num_stars, time_start, time_end)
+                show_progress = show_progress + 5
+
+    if list_pos is not None:
+
+        return stars_flux           
+
+    else:
+
+        stars_flux_map = astrokit.zeros_map(grid_pos)
+
+        stars_flux_map[0].data = stars_flux
+
+        return stars_flux_map    
+    
+
+
+def get_uv_map_old(
 
     stars_pos,
     stars_dist,
@@ -388,34 +728,45 @@ def get_uv_map(
     coord_sys,
     stars_lum = None,
     stars_temp = None,
-    stars_type = None,
-    stars_evo = None,
+    #stars_type = None,
+    #stars_evo = None,
+    num_cores = -1
 
 ):
 
     num_stars = len(stars_pos)
 
-    if stars_lum is None:
+    ###############################################################
+    #print('number of stars: '+str(num_stars))
 
-        # Instantiate class object
-        sdj = pyasl.SpecTypeDeJager()
+    #if stars_lum is None:
+    #    print('warning: no luminosity input, start to determine luminosity:')
 
-        llum  = np.zeros(num_stars)
-        lteff = np.zeros(num_stars)
+    #    # Instantiate class object
+    #    sdj = pyasl.SpecTypeDeJager()
 
-        for star in range(num_stars):
+    #    llum  = np.zeros(num_stars)
+    #    lteff = np.zeros(num_stars)
 
-            llum[star], lteff[star] = sdj.lumAndTeff(stars_type[star], stars_evo[star])
+    #    for star in range(num_stars):
 
-        stars_lum  = 10**llum * const.L_sun.cgs.value
-        stars_temp = 10**lteff
+    #        llum[star], lteff[star] = sdj.lumAndTeff(stars_type[star], stars_evo[star])
 
-    uv_lum = astrokit.uv_luminosity(stars_temp, stars_lum)
+    #    stars_lum  = 10**llum * const.L_sun.cgs.value
+    #    stars_temp = 10**lteff
+    ###############################################################
+
+    print('start dertermin FUV luminosity')
+    #uv_lum = astrokit.uv_luminosity(stars_temp, stars_lum)
+   
+    stars_lum_uv  = Parallel(n_jobs=num_cores)(delayed(astrokit.uv_luminosity)(stars_temp[star], stars_lum[star]) for star in range(num_stars))
 
     map_uv = astrokit.zeros_map(grid_inp)
 
+    print('get grid')
     grid_ra, grid_dec = astrokit.get_grid(map_uv)
 
+    print('set star positions')
     star_pos = SkyCoord(
         ra = stars_pos[:, 0] * u.deg,
         dec = stars_pos[:, 1] * u.deg,
@@ -423,6 +774,7 @@ def get_uv_map(
         frame = coord_sys
     )
 
+    print('set grid position')
     grid_pos = SkyCoord(
         ra = grid_ra*u.deg,
         dec = grid_dec*u.deg,
@@ -430,12 +782,114 @@ def get_uv_map(
         frame = coord_sys
     )
 
+    show_progress = 0
+
+    print('start to determine the UV-Field')
     for star in range(num_stars):
+
+        time_start = time.time()
 
         grid2star = grid_pos.separation_3d(star_pos[star])
 
-        uv_grid = uv_lum[star]/(4.*np.pi*grid2star.cm**2)
+        uv_grid = stars_lum_uv[star]/(4.*np.pi*grid2star.cm**2)
 
         map_uv[0].data = map_uv[0].data + uv_grid
 
+        time_end = time.time()
+        if (star/(num_stars-1)*100. > show_progress):
+            astrokit.loop_time(star, num_stars, time_start, time_end)
+            show_progress = show_progress + 5
+
     return map_uv
+
+def galactic_hydrogen_distribution( # Dickey and Lockman (1990)  galactic height hydrogen distribution
+
+    z_height # in parsec
+):
+
+    density_term_i = 0.69*np.exp(-(z_height/127.)**2)
+    density_term_ii = 0.189*np.exp(-(z_height/318.)**2)
+    density_term_iii = 0.113*np.exp(-abs(z_height/403.))
+
+    density_hydrogen = 0.566*(density_term_i + density_term_ii + density_term_iii) # in 1/cm^3
+
+    return density_hydrogen
+
+#def galactic_hydrogen_column(
+#        
+#        z_height_0,
+#        z_height_1,
+#        distance,
+#        num_steps = 1000
+#): # Dickey and Lockman (1990) 
+#    
+#    int_steps = np.linspace(0, 1, num_steps)
+#    density_term_i = np.zeros_like(int_steps)
+#    density_term_ii = np.zeros_like(int_steps)
+#    density_term_iii = np.zeros_like(int_steps)
+#    
+#    density_term_i = 0.69*np.exp(-((z_height_0+int_steps*(z_height_1-z_height_0))/127.)**2)
+#    density_term_ii = 0.189*np.exp(-((z_height_0+int_steps*(z_height_1-z_height_0))/318.)**2)
+#    density_term_iii = 0.113*np.exp(-((z_height_0+int_steps*(z_height_1-z_height_0))/403.)**2)
+#
+#    density_hydrogen = 0.566*distance*(density_term_i + density_term_ii + density_term_iii) # in 1/cm^3
+#
+#    hydrogen_column = np.trapz(density_hydrogen, int_steps)
+#
+#    return hydrogen_column
+
+def galactic_extinction(
+    
+    source_ra, # deg
+    source_dec, # deg
+    source_dist, # pc
+    star_ra, # deg
+    star_dec, # deg
+    star_dist, # pc
+    frame = 'icrs',
+    step_size = 0.1, #pc
+    cross_section_scattering = 7.5e-22,
+    scattering_events = 0.9,
+    cross_section_absorption = 8.0e-22,
+    
+):
+    
+    cross_section_total = cross_section_scattering *(1.-scattering_events) + cross_section_absorption
+
+    # Create a SkyCoord objects in Equatorial (J2000) coordinates
+    source_coord = SkyCoord(ra=source_ra*u.deg, dec=source_dec*u.deg, distance=source_dist*u.pc, frame=frame)
+    star_coord = SkyCoord(ra=star_ra*u.deg, dec=star_dec*u.deg, distance=star_dist*u.pc, frame=frame)
+
+    star2source_dist = source_coord.separation_3d(star_coord)
+
+    num_steps = int(star2source_dist.value/step_size)+1
+
+    # Convert to Galactic coordinates
+    source_galactic_coord = source_coord.galactic
+    star_galactic_coord = star_coord.galactic
+    
+    # Get the z-coordinate (height above the galactic plane)
+    source_x, source_y, source_z = source_galactic_coord.cartesian.xyz
+    star_x, star_y, star_z = star_galactic_coord.cartesian.xyz
+
+    star2source_dist_z = source_z-star_z
+
+    num_steps = int(np.abs(star2source_dist_z).value/step_size)+1
+    #num_steps = int(star2source_dist.value/step_size)+1
+
+
+    if  num_steps<2:
+
+        volume_density = galactic_hydrogen_distribution(star_z.value)
+        column_density = volume_density*star2source_dist.to(u.cm).value
+        optical_depth = column_density*cross_section_total
+        
+    else:
+
+        z_hight_steps = np.linspace(star_z.value, source_z.value, num_steps)
+        #star2source_step = star2source_dist.to(u.cm).value/num_steps
+        volume_density = galactic_hydrogen_distribution(z_hight_steps)
+        column_density = np.trapz(volume_density, z_hight_steps)*star2source_dist.to(u.cm).value/star2source_dist_z.value
+        optical_depth = np.abs(column_density*cross_section_total)
+
+    return optical_depth

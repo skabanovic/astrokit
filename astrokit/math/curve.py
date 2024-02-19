@@ -137,7 +137,7 @@ def gauss_inten(amp, width, amp_err, width_err, width_type = 'FWHM'):
 
     return inten, inten_err
 
-def polynom(order, axis, *const):
+def polynom(axis, *const, order):
 
     poly_sum = np.zeros_like(axis)
 

@@ -118,16 +118,16 @@ def gray_body(
         intensity = colden_transform*hydrogen_mass \
             *specific_dust_opacity(
                 wave,
-                beta,
-                kappa_0,
-                unit,
-                system_of_units
+                beta = beta,
+                kappa_0 = kappa_0,
+                unit = unit,
+                system_of_units = system_of_units
             )\
             *black_body(
                 wave,
                 temp,
-                unit,
-                system_of_units
+                input_unit = unit,
+                system_of_units = system_of_units
             )
 
     return intensity
@@ -215,45 +215,49 @@ def optical_depth_ratio(iso_ratio,
 
         if not optical_depth:
 
-            optical_depth=0
+            optical_depth = 1e-6
 
     else:
 
         print("error: the chosen method is not valid. chose between sybolic, numeric")
 
     #error = 0
-    if optical_depth == 0:
+    #if optical_depth == 0:
 
-        error_tau = 0.
+    #    error_tau = 0.
 
-    else:
+    #else:
 
         #print("optical_depth: "+ str(optical_depth))
 
-        error_tau = abs(optical_depth**2 /((1. + optical_depth ) * np.exp(-optical_depth) -1. ))\
-        * (ratio_norm/iso_ratio)\
-        * np.sqrt( (error_main/iso_comp)**2 \
-        + (main_comp*error_iso/iso_comp**2)**2 \
-        + (main_comp*error_ratio/(iso_comp*iso_ratio))**2 )
+    error_tau = abs(optical_depth**2 /((1. + optical_depth ) * np.exp(-optical_depth) -1. ))\
+    * (ratio_norm/iso_ratio)\
+    * np.sqrt( (error_main/iso_comp)**2 \
+    + (main_comp*error_iso/iso_comp**2)**2 \
+    + (main_comp*error_ratio/(iso_comp*iso_ratio))**2 )
 
     return optical_depth, error_tau
 
 
-def tau_spect(spect_main,
-              spect_iso,
-              vel_main,
-              vel_iso = None,
-              rms_main = 0,
-              rms_iso = 0,
-              shift_iso = 0.,
-              ratio_iso = 67.,
-              ratio_err = 0.,
-              norm_iso = 1.,
-              vel_min = None,
-              vel_max = None,
-              vel_interp = None,
-              use_axis = 'main',
-              tau_max = 30):
+def tau_spect(
+    
+    spect_main,
+    spect_iso,
+    vel_main,
+    vel_iso = None,
+    rms_main = 0,
+    rms_iso = 0,
+    shift_iso = 0.,
+    ratio_iso = 67.,
+    ratio_err = 0.,
+    norm_iso = 1.,
+    vel_min = None,
+    vel_max = None,
+    vel_interp = None,
+    use_axis = 'main',
+    tau_max = 30
+    
+):
 
     if vel_iso is None:
         vel_iso = []
@@ -268,34 +272,42 @@ def tau_spect(spect_main,
         if vel_min and vel_max:
 
             idx_min = astrokit.get_idx(vel_min, vel_main, method = 'closer')
-            idx_max = astrokit.get_idx(vel_max, vel_main, method = 'closer')
+            idx_max = astrokit.get_idx(vel_max, vel_main, method = 'closer') +1 # +1 is to include the value at index 'idx_max' in the calculation
 
             vel = vel_main[idx_min : idx_max]
 
             temp_main = spect_main[idx_min : idx_max]
 
-            temp_iso = np.interp(vel,
-                                 vel_iso,
-                                 spect_iso,
-                                 left = 0.0,
-                                 right = 0.0)
+            temp_iso = np.interp(
+                
+                vel,
+                vel_iso,
+                spect_iso,
+                left = 0.0,
+                right = 0.0
+                
+            )
+
         else:
 
             vel = vel_main
-
             temp_main = spect_main
-            temp_iso = np.interp(vel,
-                                 vel_iso,
-                                 spect_iso,
-                                 left = 0.0,
-                                 right = 0.0)
+            temp_iso = np.interp(
+                
+                vel,
+                vel_iso,
+                spect_iso,
+                left = 0.0,
+                right = 0.0
+
+            )
 
     elif use_axis == 'iso':
 
         if vel_min and vel_max:
 
             idx_min = astrokit.get_idx(vel_min, vel_iso, method = 'closer')
-            idx_max = astrokit.get_idx(vel_max, vel_iso, method = 'closer')
+            idx_max = astrokit.get_idx(vel_max, vel_iso, method = 'closer')+1 # +1 is to include the value at index 'idx_max' in the calculation
 
             vel = vel_iso[idx_min : idx_max]
 
@@ -1162,14 +1174,35 @@ def SED_fit(
             temp_dust = popt[0]
             colden_dust = 10**popt[1]#/hydrogen_mass
 
-    except RuntimeError:
+            #print(popt)
+        gray_body_fit = gray_body(
+
+            frequency,
+            popt[0],
+            popt[1],
+            beta = beta,
+            kappa_0 = kappa_0,
+            unit='frequency',
+            system_of_units = 'cgs',
+            version = 'Hildebrand+1983',
+            colden_scale = 'log10',
+            aver_mol_wei = aver_mol_wei
+
+        )
+
+        chi_squared = np.sum((dust_intensity - gray_body_fit)**2/gray_body_fit)
+
+
+    except: #RuntimeError:
 
         temp_dust = 0
 
         colden_dust = 0
 
+        chi_squared = 0
 
-    return temp_dust, colden_dust
+
+    return temp_dust, colden_dust, chi_squared
 
 def SED_map(
 
@@ -1200,7 +1233,7 @@ def SED_map(
     #hydrogen_mass = aver_mol_wei*const.m_p.cgs.value
 
     if guess[1] == 0:
-        guess[1] = 0
+        guess[1] = 0 
     else:
         guess[1] = np.log10(guess[1])#*hydrogen_mass
 
@@ -1234,6 +1267,7 @@ def SED_map(
 
     colden_dust_map = astrokit.zeros_map(input_maps[-1])
     temp_dust_map = astrokit.zeros_map(input_maps[-1])
+    chi_squared_map = astrokit.zeros_map(input_maps[-1])
 
 
     if len(sigma) > 0:
@@ -1263,21 +1297,51 @@ def SED_map(
 
     dust_intensity_list = dust_intensity_cube.reshape(len(frequency), len_dec*len_ra).transpose()
 
-    output_list  = Parallel(n_jobs=num_cores)(delayed(SED_fit)(dust_intensity, frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = beta, kappa_0 = kappa_0) for dust_intensity in dust_intensity_list)
+    check_beta = isinstance(beta, list)
+    check_kappa_0 = isinstance(kappa_0, list)
+        
+    if check_beta:
+        
+        list_beta = beta[0].data.reshape(len_dec*len_ra).transpose()
+        
+    if check_kappa_0:
+        
+        list_kappa_0 = kappa_0[0].data.reshape(len_dec*len_ra).transpose()
+
+    #output_list  = Parallel(n_jobs=num_cores)(delayed(SED_fit)(dust_intensity, frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = beta, kappa_0 = kappa_0) for dust_intensity in dust_intensity_list)
+    if check_beta and check_kappa_0:
+        
+        output_list  = Parallel(n_jobs=num_cores)(delayed(astrokit.SED_fit)(dust_intensity_list[pixel], frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = list_beta[pixel], kappa_0 = list_kappa_0[pixel]) for pixel in range(len(dust_intensity_list)))
+
+    elif check_beta:
+        
+        output_list  = Parallel(n_jobs=num_cores)(delayed(astrokit.SED_fit)(dust_intensity_list[pixel], frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = list_beta[pixel], kappa_0 = kappa_0) for pixel in range(len(dust_intensity_list)))
+        
+    elif check_kappa_0:
+        
+        output_list  = Parallel(n_jobs=num_cores)(delayed(astrokit.SED_fit)(dust_intensity_list[pixel], frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = beta, kappa_0 = list_kappa_0[pixel]) for pixel in range(len(dust_intensity_list)))
+        
+    else:    
+    
+        output_list  = Parallel(n_jobs=num_cores)(delayed(astrokit.SED_fit)(dust_intensity_list[pixel], frequency, guess, bound_min, bound_max, sigma, maxfev = maxfev, aver_mol_wei = aver_mol_wei, beta = beta, kappa_0 = kappa_0) for pixel in range(len(dust_intensity_list)))
+    
 
     temp_dust_list = np.zeros(len_dec*len_ra)
     colden_dust_list = np.zeros(len_dec*len_ra)
+    chi_squared_list = np.zeros(len_dec*len_ra)
 
     for list_entry in range(len(output_list)):
 
         temp_dust_list[list_entry] = output_list[list_entry][0]
         colden_dust_list[list_entry] = output_list[list_entry][1]
+        chi_squared_list[list_entry] = output_list[list_entry][2]
 
 
     temp_dust_map[0].data = temp_dust_list.reshape(len_dec,len_ra)
     colden_dust_map[0].data = colden_dust_list.reshape(len_dec,len_ra)
+    chi_squared_map[0].data = chi_squared_list.reshape(len_dec,len_ra)
 
-    return temp_dust_map, colden_dust_map
+    return temp_dust_map, colden_dust_map, chi_squared_map
 
 def dust_flux_ratio(
 
@@ -1310,7 +1374,7 @@ def dust_flux_ratio(
 
         frequency[0],
         temp,
-        unit='frequency',
+        input_unit='frequency',
         system_of_units = 'SI'
 
     )
@@ -1319,7 +1383,7 @@ def dust_flux_ratio(
 
         frequency[1],
         temp,
-        unit='frequency',
+        input_unit='frequency',
         system_of_units = 'SI'
 
     )
@@ -1441,14 +1505,14 @@ def dust_colden_map(
 
                 colden_dust_map[0].data[dec, ra] = observed_flux[1] \
                                                  / astrokit.specific_dust_opacity(frequency[1], beta, kappa_0, unit = 'frequency', system_of_units = 'cgs') \
-                                                 /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], unit='frequency', system_of_units = 'cgs') \
+                                                 /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], input_unit='frequency', system_of_units = 'cgs') \
                                                  /  const.m_p.cgs.value / aver_mol_wei
 
             else :
 
                 colden_dust_map[0].data[dec, ra] = observed_flux[1] \
                                                  / astrokit.specific_dust_opacity(frequency[1], beta, kappa_0, unit = 'frequency', system_of_units = 'cgs') \
-                                                 /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], unit='frequency', system_of_units = 'cgs') \
+                                                 /  astrokit.black_body(frequency[1], temp_dust_map[0].data[dec, ra], input_unit='frequency', system_of_units = 'cgs') \
                                                  /  const.m_p.cgs.value / aver_mol_wei
 
 
@@ -1526,3 +1590,88 @@ def highres_dust_colden(
                                                 + (input_map_250[0].data[dec, ra] - map_350_250[0].data[dec, ra])
 
     return highres_colden
+
+def kinetic2exitation_temperatur(
+    temp_kin, 
+    density_hydrogen, 
+    tau_peak = None,
+    temp_cont = 2.7
+):
+    # [CII] Einstein A coefficients
+    Aul = 2.29e-6
+
+     # [CII] transition frequency
+    freq_cii = 1900.5369e9
+        
+    temp_0 = (const.h.value*freq_cii)/const.k_B.value
+
+    if tau_peak is None:
+
+        beta = 1
+    
+    else:
+
+        beta = (1.-np.exp(-tau_peak))/tau_peak
+
+ 
+    Rul = 7.6e-10*(temp_kin/100)**(0.14)
+        
+    Cul = density_hydrogen*Rul
+
+    term_continuum = 1./(np.exp(temp_0/temp_cont)-1.)
+        
+    temp_ex = temp_0/np.log( (Cul + beta*(1+term_continuum)*Aul)/( term_continuum*beta*Aul + Cul*np.exp(-temp_0/temp_kin) )  )
+        
+    return temp_ex
+        
+def shell_profile(
+
+    radius_out = 1,
+    radius_in = None,
+    shell_width = 0.8,
+    colden = 1e21,
+    grid_points = 1e3,
+    colden_profile = False
+): 
+    
+    if radius_in is None:
+    
+        radius_in = radius_out - shell_width
+    
+    else:
+    
+        shell_width = radius_out - radius_in
+        
+    dist_res = radius_out/grid_points
+        
+    dist_cent = np.arange(0, radius_out+dist_res, dist_res)
+
+    path_out = np.sqrt(radius_out**2 - dist_cent**2)
+    path_in = np.sqrt(radius_in**2 - dist_cent**2)
+
+    colden_los = np.zeros_like(dist_cent)
+    path_los = np.zeros_like(dist_cent)
+    
+    path_los[dist_cent >= radius_in] = path_out[dist_cent >= radius_in]
+    path_los[dist_cent < radius_in] = path_out[dist_cent < radius_in] - path_in[dist_cent < radius_in]
+
+    colden_los = colden * path_los/shell_width
+
+    path_los_max = np.sqrt(radius_out**2 - radius_in**2)
+    
+    limb_brightening = path_los_max/shell_width
+
+    path_max_half = (path_los_max+shell_width)/2.
+
+    path_fwhm_out = np.sqrt((radius_out)**2 - path_max_half**2)
+    path_fwhm_in = 1./(2.*path_max_half) * np.sqrt(2.*(radius_in**2*path_max_half**2 + radius_in**2*radius_out**2 + radius_out**2*path_max_half**2) - (radius_in**4 + radius_out**4 + path_max_half**4))
+
+    fwhm_los = path_fwhm_out - path_fwhm_in
+    
+    if colden_profile:
+    
+        return limb_brightening, fwhm_los, colden_los, path_los 
+    
+    else:
+    
+        return limb_brightening, fwhm_los 

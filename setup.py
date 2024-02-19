@@ -1,5 +1,7 @@
 from setuptools import setup, find_packages
 
+# pip install numpy==1.23.0 or less
+
 setup(
     name='astrokit',
     version='0.1',
